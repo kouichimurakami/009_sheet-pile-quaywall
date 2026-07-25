@@ -9,10 +9,10 @@ namespace SheetPileQuayWall.Core.Tests
     public class AnchorAlignmentTests
     {
         // 標準ケース: 前壁 D=0.8m 直杭、控え杭 D=0.8m 直杭、span=10m、Z_tr=2.5m
-        private static SheetPileQuayWall.Core.AnchorPile.FrontWallRef Front(
+        private static SheetPileQuayWall.Core.FrontWallRef Front(
             double inclDeg = 0.0, double tipX = 0.0, double tipZ = -18.0)
         {
-            return new SheetPileQuayWall.Core.AnchorPile.FrontWallRef
+            return new SheetPileQuayWall.Core.FrontWallRef
             {
                 TipPoint = new SheetPileQuayWall.Core.Point3(tipX, 5.0, tipZ),
                 OuterDm = 0.800,

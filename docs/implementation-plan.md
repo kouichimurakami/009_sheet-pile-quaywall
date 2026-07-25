@@ -8,6 +8,7 @@
 > - 2026-07-25 第3版: 実装フェーズ計画を §13 として新設(旧 §13 注意点は §14 へ)。開発環境の実測(WSL に .NET SDK 10.0.302 あり / AutoCAD なし)に基づきフェーズ順を決定し、フェーズ 0(骨格)・1(移植 Core、275 テスト green)を完了。§12 に未解決事項 6(θ 付き前壁とタイロッドの幾何整合)を追加。
 > - 2026-07-25 第3版 (b): フェーズ 2(006@6d6d8cf 由来の新規 Core)完了、311 テスト green。§3 に `Point3.cs`・`PileGeometry.cs`・`AnchorPileSteel.cs` を追加。§12 に未解決事項 7(継手質量の側別配分)・8(前壁と控え杭で外径規則が異なる)を追加。
 > - 2026-07-26 第3版 (c): §12 未解決事項 1・6(タイロッドの前壁参照方式、θ 付き前壁との幾何整合)を決定8として解決。タイロッドを目視クリックから前壁選択方式へ変更し、海側取付点の X 座標を `PileGeometry.AxisXAt` で自動計算する(§1・§4・§6・§7.2 を更新)。フェーズ3のブロッカーが解消し、残る未解決は項目2〜5・7・8のみ。
+> - 2026-07-26 第3版 (d): フェーズ 3(部材間整合)完了、323 テスト green。`CrossMemberValidator`(§9 に横断チェック 4 組を追加)と `TieRodPlacement`(決定8)を新設。`FrontWallRef` を Core ルートへ移動し継手形式を追加。008 `SpanLength` の XML コメント(「控工中心まで」)が README の図・算定式・006 の定義と矛盾することを §9 に記録。
 
 ## 0. 目的とスコープ
 
@@ -85,6 +86,8 @@
 │   ├── SheetPileQuayWall.Core/            ← AutoCAD 非依存。xUnit で全網羅
 │   │   ├── Point3.cs                        【第3版追加】3次元点(AutoCAD Point3d の代替)
 │   │   ├── PileGeometry.cs                  【第3版追加】傾斜杭の共通幾何(前壁・控え杭で共用。006 BuildPileSolid の変換部分)
+│   │   ├── FrontWallRef.cs                  【フェーズ3追加】前壁の参照情報(控え杭・タイロッド・部材間整合が共用。フェーズ2では AnchorPile 配下にあったものを移動し継手形式を追加)
+│   │   ├── CrossMemberValidator.cs          【フェーズ3追加】部材間の横断チェック 4 組(§9)
 │   │   ├── FrontWall/                       前壁鋼管矢板(007 Core 移植 + 006 ロジック抽出)
 │   │   │   ├── JointCatalog.cs              継手部材諸元(007 そのまま移植)
 │   │   │   ├── JointParameters.cs           JointType enum・有効幅ディスパッチ(007 そのまま移植。第2版で補完 — 他の FrontWall 全ファイルがこの enum に依存し、これ無しではコンパイル不能)
@@ -101,11 +104,12 @@
 │   │   │   ├── TieRodParameters.cs
 │   │   │   ├── TieRodCalculator.cs
 │   │   │   ├── TieRodResult.cs
+│   │   │   ├── TieRodPlacement.cs           【フェーズ3追加】海側取付点の自動計算(決定8。目視クリックの置換)
 │   │   │   └── Enums.cs
 │   │   ├── AnchorPile/                      控え杭(006 ANCHORPILE ロジック抽出)
 │   │   │   ├── AnchorAlignment.cs           整列計算(前壁軸 + span → 控え杭軸、§2.2 のD.L.統一を反映)+ 整合性チェック
 │   │   │   ├── AnchorPileSteel.cs           【第3版追加】JIS A 5525 標準径・K011 径別肉厚範囲・JIS スナップ(006 から抽出。前壁の範囲とは異なる)
-│   │   │   ├── AnchorInput.cs               入力パラメータ + FrontWallRef(整列基準となる前壁の参照情報)
+│   │   │   ├── AnchorInput.cs               入力パラメータ(前壁の参照情報は Core ルートの FrontWallRef へ移動)
 │   │   │   └── AnchorResult.cs
 │   │   └── SheetPileQuayWall.Core.csproj    net8.0、AutoCAD 参照なし(CLAUDE.PRIVATE.md §9 対象外)
 │   │
@@ -237,8 +241,13 @@ XData のインデックス順は各部材で新規に確定し、007 の「順�
 | 前壁 | 内径>0、肉厚が jointType 別範囲内、傾斜角0〜15°、施工順位1〜総本数 | 007+006統合 |
 | タイロッド | カタログ規格径一致、waling_height条件、pile_pitch条件、tie_spacing整数倍、nut_height/adjust_length表値一致 等9項目 | 008(README §5そのまま) |
 | 控え杭 | 内径>0、肉厚範囲内、**Z_tr が前壁/控え杭の杭体範囲内(D.L.基準、§2.4)**、干渉なし(span条件)、前壁XData必須 | 006(README §5そのまま、D.L.統一により前提強化) |
+| **部材間(横断)** | **① タイロッド `PileDiameter` ⟺ 前壁 `outerDiameter`、② タイロッド `PilePitch` ⟺ 前壁の有効幅 B(継手形式から算出)、③ タイロッド `TieElevation` ⟺ 控え杭 `Z_tr`、④ タイロッド `SpanLength` ⟺ 控え杭 `span`** | **009 新規(`CrossMemberValidator`、フェーズ3)。上 3 行はいずれも単体チェックであり、同じ量を 2 部材が別々に入力している箇所の突き合わせが無かった** |
+
+上 3 行は 1 件目のエラーで停止する(`string?` 返却)。部材間チェックのみ `ValidateAll` が全不一致を返す(移植元 008 `TieRodParameters.Validate` と同じ規約)。
 
 すべて誤差許容 1 mm = 0.001 m、不一致時はエラー停止・再生成しない(自動補正しない。前壁外径の JIS/カタログスナップのみ例外)。
+
+**④ の span の同一性について**: 008 README の断面図と全長算定式(`LandEndX = SpanLength + 金物厚`)より、`SpanLength` は「前壁矢板中心 〜 陸側定着面」であり、定着金物はその面より陸側へ張り出す。006 の控え杭 `span` も同一定義(控え杭軸 X = 前壁軸 X + span − D_a/2)であり、両者は等しくなければならない。なお移植元 008 の `TieRodParameters.SpanLength` の XML コメントは「控工中心までの距離」と書いているが、README の図・算定式・006 の定義のいずれとも一致しない(控え杭軸までなら D_a/2 だけ短くなる)。**コメント側の誤りとして扱う**(移植方針によりコードは変更していない)。
 
 ---
 
@@ -301,7 +310,7 @@ XData のインデックス順は各部材で新規に確定し、007 の「順�
 | **0. 骨格** | プロジェクト 4 個(Core / Plugin / tests / stubs)、スタブ移植、`scripts/verify-dll-versions.ps1` 配置 | Core・tests がビルド成功。スタブ経由で Plugin がビルド成功 | なし | **完了 2026-07-25** |
 | **1. 移植のみの Core** | 007 `src/Data` 8 ファイル → `Core/FrontWall`、008 `TaiRod.Core` 5 ファイル → `Core/TieRod`、テスト 12 ファイル | `dotnet test` で **275/275 pass** | なし | **完了 2026-07-25** |
 | **2. 006 由来の新規 Core** | `PieceAssignment` / `FrontWallPlacement` / `AnchorAlignment` を `006@6d6d8cf` から抽出。`ed.WriteMessage` 依存を `string?` 返却へ、`Point3d` を独自 struct へ置換 | `dotnet test` で **311/311 pass**(275 移植 + 36 新規) | なし | **完了 2026-07-25** |
-| **3. 部材間整合** | `CrossMemberValidator` 新設(§9 の単体チェックに対する横断チェック)。タイロッド取付点の θ 補正は決定8(`PileGeometry.AxisXAt` 再利用)で方針確定済み、Core 実装のみ残る | 整合エラー/正常の両ケースが期待通り | なし(項目1・6 は決定8で解決済み) | 未着手 |
+| **3. 部材間整合** | `CrossMemberValidator` 新設(§9 の横断チェック 4 組)、`TieRodPlacement` 新設(決定8 の θ 補正)、`FrontWallRef` を Core ルートへ移動し継手形式を追加 | `dotnet test` で **323/323 pass**(311 + 新規 12) | なし(項目1・6 は決定8で解決済み) | **完了 2026-07-26** |
 | **4. Plugin** | XData 3 種、コマンド 12 個。前壁 → タイロッド → 控え杭の順。タイロッドは決定8により前壁選択方式で実装(008 の目視クリックからの書き直し) | スタブビルド成功 + XData 保存順/復元順の対応レビュー。実機確認は別途 | 2・4・5 | 未着手 |
 | **5. 仕上げ** | Dynamo ノード、岸壁 1 施設分の統合積算、README(§7 の 9 章構成) | Dynamo の MultiReturn キー数一致 | 3 | 未着手 |
 
@@ -315,9 +324,12 @@ XData のインデックス順は各部材で新規に確定し、007 の「順�
 | `FrontWallPlacement` / `PileGeometry` | T960〜T965 | θ=0/10° の杭頭位置、θ=15° での `AxisXAt` と `LocalToWorld` の整合、挿入点がピック点の Z を使わないこと、傾斜角・杭先端標高の範囲外 | 12 | 2 | 完了 |
 | `AnchorAlignment` | T970〜T976 | 直杭どうし、前壁 θ=10° の軸ずれ、控え杭 θ=10° の先端オフセット、派生量(軸間水平距離・杭面間浄距離・杭頭標高)、Z_tr が控え杭/前壁の杭体範囲外、干渉 span の境界(誤差 1 mm) | 11 | 2 | 完了 |
 | mm 混入検出 | T980〜T982 | 前壁 D/t と控え杭 D に mm 値を渡すと範囲チェックが検出すること、JIS スナップが m 単位で動作すること | 3 | 2 | 完了 |
-| `CrossMemberValidator` | 未採番 | 径一致 / `pile_pitch` ⟺ 有効幅 B / `tie_elevation` ⟺ Z_tr / span 整合 の各正常・異常 | 8 | 3 | 未着手 |
+| `TieRodPlacement` | T985〜T987 | θ=0 で移植元 008 と一致すること、θ=15° で約 5.5 m 陸側へずれること、取付点の Y/Z 合成 | 3 | 3 | 完了 |
+| `CrossMemberValidator` | T990〜T998 | 径一致 / `PilePitch` ⟺ 有効幅 B / `TieElevation` ⟺ Z_tr / `SpanLength` ⟺ span の各正常・異常、`ValidateAll` が全不一致を返すこと | 9 | 3 | 完了 |
 
-フェーズ 2 の新規は 36 件(`[Xunit.Theory]` の `InlineData` を 1 件と数えた場合は 18 件)。移植 275 件と合わせて **311 件**。
+フェーズ 2 の新規は 36 件(`[Xunit.Theory]` の `InlineData` を 1 件と数えた場合は 18 件)。移植 275 件と合わせて 311 件。フェーズ 3 の新規 12 件を加えて **323 件**。
+
+`CrossMemberValidator` のピッチ照合テストは、継手有効間隔 J が D 非依存(0.2478 m)で期待値を厳密に書ける P-P 形を用いる(D=1.000 m → 有効幅 B=1.2478 m)。
 
 「XData 位置追随(MOVE 後の再生成一致)」は AutoCAD ランタイムの挙動であり Core では検証できないため、§10 のテスト計画から外し、フェーズ 4 の実機手動検証項目とする。
 
