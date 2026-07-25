@@ -22,6 +22,17 @@ namespace Autodesk.AutoCAD.Runtime
     }
 }
 
+// Dynamo Zero Touch Node 用。実体は DynamoServices.dll（Dynamo 3.3）にある。
+namespace Autodesk.DesignScript.Runtime
+{
+    [System.AttributeUsage(System.AttributeTargets.Method)]
+    public sealed class MultiReturnAttribute : System.Attribute
+    {
+        public MultiReturnAttribute(string[] keys) { Keys = keys; }
+        public string[] Keys { get; }
+    }
+}
+
 namespace Autodesk.AutoCAD.Geometry
 {
     public struct Point2d
