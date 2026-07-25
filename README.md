@@ -3,7 +3,7 @@
 **鋼管矢板式岸壁**(前壁鋼管矢板 + タイロッド + 控え杭)を、単一の DLL で完結してパラメトリック 3D モデル生成・積算(施工歩掛計算)できる AutoCAD 2025 / Civil 3D 2025 プラグイン。
 
 - ターゲット: C# / .NET 8.0、`net8.0-windows`、x64、AutoCAD 2025 .NET / Civil 3D 2025 / Dynamo 3.3(Zero Touch Node)
-- 構成: **Core(AutoCAD 非依存の計算層)/ Plugin(AutoCAD 依存層)** の 2 プロジェクト分割。Core は BCL のみを参照し、WSL / Linux でもテストできる(**xUnit 335 ケース green**)
+- 構成: **Core(AutoCAD 非依存の計算層)/ Plugin(AutoCAD 依存層)** の 2 プロジェクト分割。Core は BCL のみを参照し、WSL / Linux でもテストできる(**xUnit 382 ケース green**)
 - `006_steel-pipe-pile` / `007_steel-pipe-sheet-pile` / `008_tairod` の後継・統合版であり、**009 単独でビルド・実行できる**(3 リポジトリへのプロジェクト参照・アセンブリ参照は持たない)
 
 設計判断の経緯(決定 1〜11)・フェーズ計画・実機検証項目は [`docs/implementation-plan.md`](docs/implementation-plan.md) を参照。
@@ -78,7 +78,7 @@
 
 ## 3. AutoCAD / Civil 3D コマンド
 
-全 **12 コマンド**。接頭辞は `SPQW`(Sheet Pile Quay Wall)。命名は次のパターンに従う。
+全 **13 コマンド**。接頭辞は `SPQW`(Sheet Pile Quay Wall)。命名は次のパターンに従う。
 
 | パターン | 役割 |
 |---|---|
@@ -93,7 +93,8 @@
 | `SPQW_FRONTWALL_Create` | 対話入力 → Solid3d 生成(実形状継手 + 傾斜角対応)→ XData 記録 |
 | `SPQW_FRONTWALL_Action` | 既存選択 → 諸元再入力 → 同位置に再生成(**MOVE 後は移動先に追随**) |
 | `SPQW_FRONTWALL_Query` | 諸元・断面性能(K011)・継手要否・質量を出力 |
-| `SPQW_FRONTWALL_Estimate` | 打設歩掛積算(貫入抵抗 R・ハンマ選定・打設日数・労務編成。積算基準 3-4.5) |
+| `SPQW_FRONTWALL_Estimate` | **打撃工法**の打設歩掛積算(貫入抵抗 R・ハンマ選定・打設日数・労務編成。積算基準 4節 3-4.5) |
+| `SPQW_FRONTWALL_VibroEstimate` | **振動工法**の打設歩掛積算(バイブロハンマ規格・付帯機械・打設日数・労務編成。積算基準 16節 3-2、**海上打設のみ**) |
 
 ### タイロッド(レイヤー「タイ材」)
 
@@ -123,7 +124,9 @@
 1. `SPQW_FRONTWALL_Create` — 矢板 1 本ごとに施工順位(`pieceIndex`)を指定して生成(継手の要否・雌雄は順位から自動判定)
 2. `SPQW_TIEROD_Create` — 前壁を選択。海側取付点 X は前壁の θ・Z_tip から自動算出、位置は Y のみピック
 3. `SPQW_ANCHORPILE_Create` — 前壁を選択。タイロッド軸線に整列した位置へ自動配置
-4. `SPQW_QUAYWALL_Estimate` / `SPQW_FRONTWALL_Estimate` — 数量集計・打設歩掛積算
+4. `SPQW_QUAYWALL_Estimate` / `SPQW_FRONTWALL_Estimate`(打撃工法)または `SPQW_FRONTWALL_VibroEstimate`(振動工法)— 数量集計・打設歩掛積算
+
+**打設工法の選択**: 打撃工法(4節 3-4.5)と振動工法(16節 3-2)は積算基準上の**別節・別歩掛**であり、コマンドを分けている。どちらを適用するかは現場条件・土質条件から利用者が判断する。基準の適用工法表(3-1-3)によれば、騒音・油飛散への配慮が必要な場合はバイブロが標準適用となる一方、**支持層へ打込む/中間層を打抜く場合のバイブロ単独は標準適用外**(ジェット併用が必要)である。
 
 タイロッド・控え杭の入力時には前壁との整合(§8 の部材間チェック)を検査し、不一致はエラー停止する。
 
@@ -283,7 +286,22 @@ Civil 3D 2025 同梱の Dynamo 3.3。カテゴリ `SheetPileQuayWall.Plugin > Dy
 | 継手の要否・雌雄 | 施工順位から一意(`pieceIndex > 1` で −Y 側、`pieceIndex < pieceCount` で +Y 側) | 確定 |
 | 継手質量(側別) | A 側(+Y): LT = 山形鋼×2 / PP・PT = 鋼管。B 側(−Y): LT・PT = T 形鋼 / PP = 鋼管 | 確定 |
 | 杭頭標高 | Z_tip + L·cos θ | 確定 |
-| 貫入抵抗 R / ハンマ規格 / 打撃速度 Sb / 打設時間 Tc / 日当り打設 Q / 労務編成 | 積算基準 3-4.5 | 確定 |
+| **打撃工法**: 貫入抵抗 R / ハンマ規格 / 打撃速度 Sb / 打設時間 Tc / 日当り打設 Q / 労務編成 | 積算基準 4節 3-4.5 | 確定 |
+
+**振動工法(バイブロハンマ、積算基準 16節 3-2、海上打設のみ)**
+
+| 派生量 | 計算式・出典 | 信頼度 |
+|---|---|---|
+| 本管の貫入抵抗 R1 | 300·N·Ap + 2·N̄·Lb·As(3-16-29)。打撃工法の R と同一形 | 確定 |
+| 継手の貫入抵抗 Rj | R1 × 10⁻¹。**鋼管矢板のみ**加算(鋼管杭は 0)。打撃工法には無い振動工法固有の項 | 確定 |
+| バイブロハンマ規格 | 鋼材質量と R の**両方**が収まる最小規格。90kW(2t/2,000kN)/ 120kW(5t/6,000)/ 150kW(9t/13,000)/ 200kW(15t/20,000)/ 240kW(20t/28,000) | 確定 |
+| 発動発電機・起重機船 | バイブロ規格から一意(90kW→300kVA・80t吊 〜 240kW→800kVA・200t吊) | 確定 |
+| 準備時間 Tp | 24 + 0.6·(Lb − 25) [分/本] | 確定 |
+| 打込時間 Tb | Lb ÷ Lo。Lo = 鋼管矢板 0.75 / 鋼管杭 0.90 m/分 | 確定 |
+| 溶接時間 Tw | 4節 3-4.5 の溶接時間表を適用(3-16-31 注5) | 確定 |
+| 日当り打設 Q | T·60/Tc ×(ei + E1 + E2 + E3)。ei = 0.70(海上)、T = 6 h/日 | 確定 |
+| 労務編成 | 打設長 25 m 境界で とび工 が 3→5 人(鋼管矢板)。世話役 1・普通作業員 3・特殊作業員 1 は一定 | 確定 |
+| 継手溶接機械 | φ800mm 未満: 500A×1 + 100kVA / φ800mm 以上: 500A×2 + 125kVA | 確定 |
 
 ### 6.2 タイロッド
 
@@ -317,7 +335,7 @@ Civil 3D 2025 同梱の Dynamo 3.3。カテゴリ `SheetPileQuayWall.Plugin > Dy
 Core 層は AutoCAD 非依存のため WSL / Linux でもビルド・テストできる。Plugin 層は AutoCAD が必要で、無い環境ではスタブで構文検証まで行う。
 
 ```bash
-# Core + テスト(AutoCAD 不要。335 件が green であること)
+# Core + テスト(AutoCAD 不要。382 件が green であること)
 dotnet test tests/SheetPileQuayWall.Core.Tests -c Release
 
 # Plugin の構文検証(AutoCAD 不要。スタブとリンクする。配布不可)
@@ -342,16 +360,16 @@ AutoCAD が既定パス以外にある場合は `-p:AcadRoot="..."` を指定す
 │   │   ├── Point3.cs / PileGeometry.cs / FrontWallRef.cs
 │   │   ├── CrossMemberValidator.cs      部材間整合チェック(§8 の 4 組)
 │   │   ├── QuayWallEstimate.cs          施設 1 件分の数量集計
-│   │   ├── FrontWall/                   007 移植 8 + 新規 3(PieceAssignment・FrontWallPlacement・JointMass)
+│   │   ├── FrontWall/                   007 移植 8 + 新規 4(PieceAssignment・FrontWallPlacement・JointMass・VibroEstimate)
 │   │   ├── TieRod/                      008 移植 5 + 新規 1(TieRodPlacement)
 │   │   └── AnchorPile/                  006@6d6d8cf 由来(書き直し)4 ファイル
 │   └── SheetPileQuayWall.Plugin/        AutoCAD 依存層
-│       ├── Commands/                    SPQW_* 12 コマンド(部材別 4 ファイル)
+│       ├── Commands/                    SPQW_* 13 コマンド(部材別 5 ファイル)
 │       ├── XData/                       XDataStore(キー=値 + 1011)+ 3 部材のレコード
 │       ├── Dynamo/SpqwNodes.cs          Zero Touch Node 2 個
 │       └── DrawingHelper.cs / Prompt.cs / SolidBuilder.cs
 ├── stubs/                               AutoCAD API スタブ(構文検証専用。配布禁止)
-├── tests/SheetPileQuayWall.Core.Tests/  xUnit 335 ケース + fixtures/
+├── tests/SheetPileQuayWall.Core.Tests/  xUnit 382 ケース + fixtures/
 ├── scripts/
 │   ├── port-from-legacy.sh              007/008 からの冪等移植
 │   └── verify-dll-versions.ps1          参照 DLL バージョン実測(CLAUDE.PRIVATE.md §9)
@@ -401,6 +419,11 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 - **前壁の壁一括生成が無い**。矢板 1 本ごとに平面位置をピックする方式(006 / 007 から踏襲)のため、100 本の壁では 100 回の操作になる。ピッチ B での自動配置は未実装。
 - **前壁と控え杭で外径の規則が異なる**。前壁は K011(D 0.500〜2.000 m、肉厚一律、スナップなし)、控え杭は JIS A 5525(D 0.3185〜2.500 m、径別肉厚範囲、スナップあり)。控え杭は継手を持たない単独杭のため規則が違うこと自体は妥当だが、同一図面内で非対称になる。
 - **工種体系へのマッピングは未実装**。`SPQW_QUAYWALL_Estimate` は鋼材質量の集計までで、『港湾工事工種体系ツリー.md』のレベル体系への対応付けは行っていない。
+- **2 つの打設積算コマンドで鋼材質量の算定基礎が異なる**。`SPQW_FRONTWALL_Estimate`(打撃)はハンマ選定に**本管質量のみ**を使う(移植元 007 の挙動を維持)のに対し、`SPQW_FRONTWALL_VibroEstimate`(振動)は実際に吊り込む**本管 + 継手金物**を使う。積算基準はどちらも「鋼材質量」としか書いておらず、継手を含めるかを明示していない。振動側は内訳を画面に出力して差が追えるようにしてある。統一するかは要判断。
+- **端数処理が 2 モジュールで異なる**。`VibroEstimate` は基準の「四捨五入」に合わせ `MidpointRounding.AwayFromZero` を使うが、既存の `DriveEstimate` は `System.Math.Round` の既定(銀行丸め・偶数丸め)のままである。ちょうど中間値になった場合のみ最終桁が 1 違う。`DriveEstimate` 側は移植済みコードのため本件では触れていない。
+- **ウォータージェット併用(積算基準 16節 3-1)は未実装**。バイブロ単独が適用外となる条件(支持層への打込み・中間層の打抜き)では基準上ジェット併用が必要だが、噴射ノズル数・水中ポンプ・水槽・発動発電機 3 系統の選定を伴うため範囲外とした。
+- **振動工法の陸上打設は基準に鋼管矢板の歩掛が無い**。16節 3-2 の適用範囲は海上打設に限られ、陸上のバイブロ歩掛(16節 2-1)は鋼矢板・H 形鋼杭が対象で鋼管矢板を含まない。そのため `SPQW_FRONTWALL_VibroEstimate` は施工区分を尋ねず海上固定としている。
+- **施工規模区分 E3 の OCR が乱れている**。原文の表が「鋼管杭 50 本未満 −0.05 / 鋼管矢板 50 本以上 0」と読める形に崩れており、打撃工法(3-4.5)と同じ「50 本未満 −0.05 / 50 本以上 0」と解釈して実装した。原本での確認が望ましい。
 
 ---
 

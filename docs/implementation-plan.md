@@ -12,6 +12,7 @@
 > - 2026-07-26 第3版 (e): フェーズ 4 のブロッカーを一括解決 — 決定9(XData を 008 の キー=値 + `fmt` 方式に統一。§6.1 新設、位置依存とする旧記載を差し替え)、決定10(`_JointModel` は移植しない。コマンド 12→11 個)、決定11(旧 RegApp 図面との互換は持たない)。§12 の項目 2・4・5 が解決し、フェーズ 4 のブロッカーは無くなった。残る未解決はフェーズ 5 の項目 3・7 と、記録のみの項目 8。
 > - 2026-07-26 第3版 (f): フェーズ 4(Plugin)完了。XData 3 種(決定9 のキー=値方式)+ コマンド 11 個 + 共通ヘルパー 3 種を実装し、スタブビルドがエラー 0・警告 0。スタブに Polyline/Circle/Region/DBObjectCollection/Point2d/Handle/BooleanOperationType 等を追加。§3・§6 を実装に合わせて更新し、§13.5 に実機手動検証項目 8 件を追加。
 > - 2026-07-26 第3版 (g): フェーズ 5(仕上げ)完了、335 テスト green。§12 項目3(Dynamo 範囲)を決定、項目7(継手質量の側別配分)を `JointShapes` の実形状から解決し、**移植元 007 `JointCatalog.JointMassPerM` が P-P 形で鋼管を 1 本分しか数えないバグを発見**。`FrontWall.JointMass`・`QuayWallEstimate`・`SPQW_QUAYWALL_Estimate`・Dynamo ノード 2 個・README(9 章構成)を追加。残る未解決は記録のみの項目 8。
+> - 2026-07-26 第3版 (i): **振動工法(バイブロハンマ)の打設歩掛積算を追加**、382 テスト green。積算基準 3章16節 3-2(3-16-26〜31)から `FrontWall.VibroEstimate` を新設し、`SPQW_FRONTWALL_VibroEstimate` コマンド(12→13 個)を追加。4節 3-4.5 の注記「バイブロハンマによる場合は 16節 仮設工を適用することができる」に従い、打撃工法(`DriveEstimate`)とは別モジュール・別コマンドとして実装した。**鋼管矢板には継手の貫入抵抗 Rj = R1×10⁻¹ が加算される**点が打撃工法との実質的な差(3-16-29)。適用範囲は海上打設のみで、ウォータージェット併用(16節 3-1)は範囲外。
 > - 2026-07-26 第3版 (h): 実装後の批判的レビュー指摘を反映 — ① 前壁挿入点を 1011(World 座標点)で併記保存し読み側で優先(決定9 でキー=値の文字列化により失われていた MOVE 追随を復活。§6・§6.1)、② タイロッドの鋼種・設計基準・荷重状態プロンプトを追加(008 `TryGrade`/`TryCode`/`TryState` 相当の移植漏れ修正)し、積算基準表内の径(φ38〜φ65)はナット高さ・調節長を自動設定、③ タイロッドのプロンプト範囲 5 項目を Core 検証範囲に一致、④ §4 に `SPQW_QUAYWALL_Estimate` を追加・Dynamo ノード名を実装(`CalcSection`・`CalcQuayWallQuantity`)に更新・`ProtoGeometry.dll` の参照記載を削除、⑤ `SPQW_ANCHORPILE_Query` に積算数量出力(1 本あたり)を復元(006 同等)、⑥ `SPQW_TIEROD_Action` は Y を保持して同位置再生成(§2.4 整合)。
 
 ## 0. 目的とスコープ
@@ -154,7 +155,8 @@
 | `SPQW_FRONTWALL_Create` | `SPSP_Create`(007)+ 傾斜角・継手自動判定(006) | 対話入力 → Solid3d 生成(実形状継手 + 傾斜角対応) → XData 記録 |
 | `SPQW_FRONTWALL_Action` | `SPSP_Action`(007)+ XData 位置追随(006) | 既存選択 → 再入力 → 同位置(MOVE 後は追随)に再生成 |
 | `SPQW_FRONTWALL_Query` | `SPSP_Query`(007) | 諸元・断面性能・積算数量を出力 |
-| `SPQW_FRONTWALL_Estimate` | `SPSP_Estimate`(007) | 打設歩掛積算(貫入抵抗・ハンマ選定・労務編成) |
+| `SPQW_FRONTWALL_Estimate` | `SPSP_Estimate`(007) | **打撃工法**の打設歩掛積算(貫入抵抗・ハンマ選定・労務編成。4節 3-4.5) |
+| `SPQW_FRONTWALL_VibroEstimate` | (新設。旧版に相当なし) | **振動工法**の打設歩掛積算(バイブロハンマ規格・付帯機械・労務編成。16節 3-2、海上打設のみ。第3版(i)) |
 | ~~`SPQW_FRONTWALL_JointModel`~~ | ~~`SPSP_JointModel`(007)~~ | **移植しない(決定10)**。`_Create` を `pieceIndex=1/2` で 2 回実行すれば同等の嵌合ペアが得られる |
 | `SPQW_TIEROD_Create` | `TAIROD_Create`(008)+ 前壁選択方式へ変更(決定8) | 前壁選択 → θ 付き軸位置を自動計算 → 組数分の Solid3d 生成、XData 記録(旧: 目視クリックのみ) |
 | `SPQW_TIEROD_Action` | `TAIROD_Action`(008)+ 前壁Handle追随(決定8) | 選択1本を、前壁の現在の位置・θ・Z_tip に基づき再計算した軸位置で再生成 |
