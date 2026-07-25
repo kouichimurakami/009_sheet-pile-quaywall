@@ -10,11 +10,11 @@
 
 | 由来 | 内容 | 採否 |
 |---|---|---|
-| `006_steel-pipe-pile` | 前壁鋼管矢板(簡易継手・傾斜角・XData 挿入点追随)+ 控え杭(タイロッド軸線整列) | 検討中(§ アーキテクチャ確定待ち) |
-| `007_steel-pipe-sheet-pile` | 前壁鋼管矢板(実形状継手 LT65/75/100・PP・PT、断面性能、打設歩掛積算) | 検討中(同上) |
-| `008_tairod` | タイロッド(Core/Plugin 分割、172 テストで検証済みの計算層) | 検討中(同上) |
+| `006_steel-pipe-pile`(移植元は `006@6d6d8cf` に時点固定) | 前壁鋼管矢板(簡易継手・傾斜角・XData 挿入点追随)+ 控え杭(タイロッド軸線整列)※ `006@6d6d8cf` 時点の内容。006 本体はその後 `6a777b1` で継手・控え杭を削除し鋼管杭単独に純化済みのため、該当ロジックは 006 の現行版には存在しない | 採用(009 がこの機能の正式な後継。詳細は docs/implementation-plan.md §1 決定5) |
+| `007_steel-pipe-sheet-pile` | 前壁鋼管矢板(実形状継手 LT65/75/100・PP・PT、断面性能、打設歩掛積算) | 採用(Core 層をそのまま移植) |
+| `008_tairod` | タイロッド(Core/Plugin 分割、172 テストで検証済みの計算層) | 採用(Core 層をそのまま移植) |
 
-どの実装を土台にするか、プロジェクト構成(単一プロジェクト or Core/Plugin 分割)は未確定。詳細は README.md の提案セクションを参照。
+プロジェクト構成は Core(AutoCAD 非依存)/ Plugin(AutoCAD 依存)分割に決定済み(docs/implementation-plan.md §1 決定4)。詳細は docs/implementation-plan.md を参照。
 
 ## ターゲット環境
 
@@ -53,7 +53,7 @@ https://help.autodesk.com/view/CIV3D/2025/JPN/?guid=GUID-ECDDB244-F5B9-4FFF-AF02
 
 - **`using` ディレクティブを使わない**。型は完全修飾名で書く(例:`Autodesk.AutoCAD.DatabaseServices.Solid3d`)。
 - 参照 DLL は `<Private>False</Private>`(Copy Local = False)必須 — AutoCAD 本体 DLL を配布物に同梱しない。
-- mm 単位を絶対に混入しない。**単位はメートル統一**。
+- mm 単位を内部処理に絶対に混入しない。**単位はメートル統一**。ただし対話コマンドのプロンプト表示・入力に限り mm 呼称を許容する(例:外径 D、肉厚 t)。値を取得した直後に m へ変換し、以降の内部処理・XData・派生量・テストはすべて m とする(docs/implementation-plan.md §1 決定7)。
 - Dynamo Zero Touch Node の戻り値は `[MultiReturn]` で辞書キーに日本語を用いる(将来拡張時)。
 - 英語パラメータ名と日本語説明の対応は `Dictionary<string, string>` で内部に保持する。
 
