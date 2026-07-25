@@ -111,7 +111,8 @@ namespace Autodesk.AutoCAD.DatabaseServices
     public enum DxfCode
     {
         ExtendedDataRegAppName = 1001,
-        ExtendedDataAsciiString = 1000
+        ExtendedDataAsciiString = 1000,
+        ExtendedDataWorldXCoordinate = 1011
     }
 
     public struct ObjectId

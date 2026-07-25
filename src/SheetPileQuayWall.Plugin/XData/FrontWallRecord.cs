@@ -15,6 +15,8 @@
 //   piece_count  総本数 [本]
 //   color        本管の色 (ACI)
 //   tip_x/_y/_z  杭先端(挿入点)の WCS 座標 [m]。_z は D.L. 基準の杭先端標高
+//   (1011)       杭先端の World 座標点。MOVE に AutoCAD が自動追随させるため、
+//                読み側はこちらを優先し、tip_x/_y/_z はフォールバック(006 の追随を維持)
 
 namespace SheetPileQuayWall.Plugin.XData
 {
@@ -50,6 +52,7 @@ namespace SheetPileQuayWall.Plugin.XData
             XDataStore.AddInt(values, "piece_count", PieceCount);
             XDataStore.AddInt(values, "color", ColorIdx);
             XDataStore.AddPoint(values, "tip", TipPoint);
+            XDataStore.AddWorldPoint(values, TipPoint);
 
             return XDataStore.ToBuffer(values);
         }
@@ -76,6 +79,13 @@ namespace SheetPileQuayWall.Plugin.XData
             r.PieceCount = XDataStore.ReadInt(map, "piece_count", r.PieceCount);
             r.ColorIdx = XDataStore.ReadInt(map, "color", r.ColorIdx);
             r.TipPoint = XDataStore.ReadPoint(map, "tip", r.TipPoint);
+
+            // MOVE 後は 1011 だけが移動先を指す。存在すれば文字列キーより優先する
+            SheetPileQuayWall.Core.Point3 worldTip;
+            if (XDataStore.TryReadWorldPoint(entity, RegAppName, out worldTip))
+            {
+                r.TipPoint = worldTip;
+            }
             return r;
         }
 

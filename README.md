@@ -75,7 +75,7 @@
 |---|---|
 | `SPQW_ANCHORPILE_Create` | **前壁選択** → タイロッド軸線に整列した控え杭を生成 |
 | `SPQW_ANCHORPILE_Action` | 前壁基準の整列位置に再生成(MOVE していても整列位置へ戻る) |
-| `SPQW_ANCHORPILE_Query` | 諸元・整列座標・杭面間浄距離を出力 |
+| `SPQW_ANCHORPILE_Query` | 諸元・整列座標・積算数量(1 本あたり)を出力 |
 
 ### 施設全体
 
@@ -83,7 +83,7 @@
 |---|---|
 | `SPQW_QUAYWALL_Estimate` | 岸壁 1 施設分の鋼材質量を 3 部材まとめて集計 |
 
-**運用上の注意**: タイロッドと控え杭は前壁を選択してから作成する。両者は平面 X 座標を XData に保存せず、前壁 Handle と `span` / `tie_elev` から `_Action` のたびに再計算するため、前壁を MOVE したり傾斜角を変えたりしても整列位置に追随する。
+**運用上の注意**: タイロッドと控え杭は前壁を選択してから作成する。両者は平面 X 座標を XData に保存せず、前壁 Handle と `span` / `tie_elev` から `_Action` のたびに再計算するため、前壁を MOVE したり傾斜角を変えたりしても整列位置に追随する。前壁自身の挿入点は `tip_x/_y/_z`(キー=値)に加えて World 座標点(DxfCode 1011)を併記保存し、読み側は 1011 を優先する。1011 は MOVE に AutoCAD が自動追随させるため、MOVE 後の `SPQW_FRONTWALL_Action` も移動先に再生成される。
 
 ---
 
@@ -176,22 +176,25 @@ Civil 3D 2025 同梱の Dynamo 3.3。カテゴリ `SheetPileQuayWall.Plugin > Dy
 | 英語名 | 日本語名 | 単位 | デフォルト値 | 範囲 |
 |---|---|---|---|---|
 | `frontWallSelection` | 基準とする前壁 | − | − | `SPQW_FRONTWALL` XData を持つ Solid3d |
-| `rodDiameter` | タイロッド径 | m | 0.048 | 0.020〜0.100(カタログ規格径へスナップ) |
+| `steelGrade` | 鋼種 | − | HT690 | HT690 / HT740 / SS400 / SS490(部分係数法は HT690・SS400 のみ) |
+| `designCode` | 設計基準 | − | PartialFactor | Allowable(許容応力度法)/ PartialFactor(部分係数法) |
+| `loadState` | 荷重状態 | − | Normal | Normal(常時/永続)/ Seismic(地震時/変動) |
+| `rodDiameter` | タイロッド径 | m | 0.048 | 0.020〜0.100(カタログ規格径のみ可) |
 | `spanLength` | 法線直角方向延長 span | m | 10.000 | 3.000〜40.000 |
 | `pileDiameter` | 海側鋼管矢板径 | m | 前壁の外径 | 0.600〜1.600 |
 | `pilePitch` | 鋼管矢板ピッチ | m | 前壁の有効幅 B | 0.600〜2.000 |
 | `tieSpacing` | タイロッド取付間隔 | m | 2.400 | ピッチの整数倍 |
 | `tieCount` | 組数 | 組 | 1 | 1〜200 |
-| `hwl` | H.W.L. 標高 | m(D.L.) | 2.000 | −5.000〜10.000 |
+| `hwl` | H.W.L. 標高 | m(D.L.) | 2.000 | 0.000〜5.000 |
 | `tieElevation` | タイロッド軸心標高 | m(D.L.) | `hwl` + 0.500 | −5.000〜10.000 |
 | `walingHeight` | 腹起し溝形鋼高さ h | m | 0.300 | 0 不可、≦ `pileDiameter` |
-| `plateThickness` | 定着プレート厚 t2 | m | 0.025 | 0.001〜0.200 |
-| `washerThickness` | 定着ワッシャー厚 t1 | m | 0.006 | 0.001〜0.200 |
-| `nutHeight` | ナット高さ | m | 0.055 | 積算基準表値と一致 |
+| `plateThickness` | 定着プレート厚 t2 | m | 0.025 | 0.001〜0.100 |
+| `washerThickness` | 定着ワッシャー厚 t1 | m | 0.006 | 0.001〜0.100 |
+| `nutHeight` | ナット高さ | m | 0.055 | 0.001〜0.200(φ38〜φ65 は積算基準表値を自動設定し入力省略) |
 | `adjustLength` | 調節長 | m | 0.055 | 同上 |
 | `anchorReaction` | 取付点反力 Ap | kN/m | 0.0 | 0 で張力照査なし |
 | `layerColor` | 色 | ACI | 30 | 1〜255 |
-| `positionY` | 1 組目の位置 Y | m | − | UCS ピック(**X は前壁から自動計算**) |
+| `positionY` | 1 組目の位置 Y | m | − | UCS ピック(**X は前壁から自動計算**。`_Action` では保存値を保持) |
 
 `span_length` は「前壁矢板中心 〜 陸側定着面」の水平距離(積算基準 3-4.5-(13))。定着金物はこの面より陸側へ張り出す。
 

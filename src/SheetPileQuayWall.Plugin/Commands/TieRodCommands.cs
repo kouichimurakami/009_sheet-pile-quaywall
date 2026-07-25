@@ -103,6 +103,7 @@ namespace SheetPileQuayWall.Plugin.Commands
 
         // ════════════════════════════════════════════════════════════════════
         // SPQW_TIEROD_Action: 選択 1 本を、前壁の現在の θ・Z_tip に基づき再生成
+        // (Y は保存値を保持し同位置に再生成する。§2.4 の _Action = 同位置再生成)
         // ════════════════════════════════════════════════════════════════════
         [Autodesk.AutoCAD.Runtime.CommandMethod("SPQW_TIEROD_Action")]
         public static void Action()
@@ -148,7 +149,8 @@ namespace SheetPileQuayWall.Plugin.Commands
 
             SheetPileQuayWall.Core.TieRod.TieRodParameters p = stored.Parameters;
             double positionY;
-            if (!PromptParameters(ed, p, front, out positionY, defaultY: stored.PositionY))
+            if (!PromptParameters(ed, p, front, out positionY,
+                defaultY: stored.PositionY, askPlanPoint: false))
             {
                 return;
             }
@@ -292,20 +294,55 @@ namespace SheetPileQuayWall.Plugin.Commands
         }
 
         // ────────────────────────────────────────────────────────────────────
+        // askPlanPoint=false(_Action)では positionY に defaultY を保持し、再ピックしない
         private static bool PromptParameters(
             Autodesk.AutoCAD.EditorInput.Editor ed,
             SheetPileQuayWall.Core.TieRod.TieRodParameters p,
             SheetPileQuayWall.Plugin.XData.FrontWallRecord front,
             out double positionY,
-            double defaultY = 0.0)
+            double defaultY = 0.0,
+            bool askPlanPoint = true)
         {
             positionY = defaultY;
+
+            // 鋼種・設計基準・荷重状態(008 TryGrade / TryCode / TryState 相当)。
+            // 許容張力はこの 3 項目と径で決まるため、省略すると張力照査が既定値
+            // (HT690・部分係数法・永続)のまま行われてしまう
+            string gradeText;
+            if (!SheetPileQuayWall.Plugin.Prompt.TryAskKeyword(
+                ed, $"\n鋼種 <{p.Grade}>: ",
+                new string[] { "HT690", "HT740", "SS400", "SS490" },
+                p.Grade.ToString(), out gradeText)) return false;
+            p.Grade = ParseEnum(gradeText, p.Grade);
+
+            string codeText;
+            if (!SheetPileQuayWall.Plugin.Prompt.TryAskKeyword(
+                ed, $"\n設計基準 (Allowable=旧基準・許容応力度法 / PartialFactor=新基準・部分係数法) <{p.Code}>: ",
+                new string[] { "Allowable", "PartialFactor" },
+                p.Code.ToString(), out codeText)) return false;
+            p.Code = ParseEnum(codeText, p.Code);
+
+            string stateText;
+            if (!SheetPileQuayWall.Plugin.Prompt.TryAskKeyword(
+                ed, $"\n荷重状態 (Normal=常時/永続 / Seismic=地震時/変動) <{p.State}>: ",
+                new string[] { "Normal", "Seismic" },
+                p.State.ToString(), out stateText)) return false;
+            p.State = ParseEnum(stateText, p.State);
 
             double value;
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
                 ed, $"\nタイロッド径 (m) <{p.RodDiameter:F3}>: ",
                 p.RodDiameter, 0.020, 0.100, out value)) return false;
             p.RodDiameter = value;
+
+            // 積算基準表(φ38〜φ65)に値がある径は、ナット高さ・調節長を表値に自動設定
+            // して入力を省く(008 と同じ。表内の径では Validate が表値との一致を要求する)
+            bool nutFromTable = p.ApplyStandardNutHeight();
+            if (nutFromTable)
+            {
+                ed.WriteMessage(
+                    $"\n  ナット高さ・調節長を積算基準表から {p.NutHeight:F3} m に設定しました。");
+            }
 
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
                 ed, $"\n法線直角方向延長 span (m, 前壁矢板中心〜陸側定着面) <{p.SpanLength:F3}>: ",
@@ -335,7 +372,7 @@ namespace SheetPileQuayWall.Plugin.Commands
 
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
                 ed, $"\nH.W.L. 標高 (m, D.L. 基準) <{p.Hwl:F3}>: ",
-                p.Hwl, -5.0, 10.0, out value)) return false;
+                p.Hwl, 0.0, 5.0, out value)) return false;
             p.Hwl = value;
 
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
@@ -350,23 +387,30 @@ namespace SheetPileQuayWall.Plugin.Commands
 
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
                 ed, $"\n定着プレート厚 t2 (m) <{p.PlateThickness:F3}>: ",
-                p.PlateThickness, 0.001, 0.200, out value)) return false;
+                p.PlateThickness, 0.001, 0.100, out value)) return false;
             p.PlateThickness = value;
 
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
                 ed, $"\n定着ワッシャー厚 t1 (m) <{p.WasherThickness:F3}>: ",
-                p.WasherThickness, 0.001, 0.200, out value)) return false;
+                p.WasherThickness, 0.001, 0.100, out value)) return false;
             p.WasherThickness = value;
 
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
-                ed, $"\nナット高さ (m) <{p.NutHeight:F3}>: ",
-                p.NutHeight, 0.001, 0.300, out value)) return false;
-            p.NutHeight = value;
+            // 表外の径のみナット高さ・調節長を明示入力させる(表内は自動設定済み)
+            if (!nutFromTable)
+            {
+                ed.WriteMessage(
+                    "\n  この径は積算基準のナット高さ表 (φ38〜φ65) の範囲外です。値を指定してください。");
 
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
-                ed, $"\n調節長 (m) <{p.AdjustLength:F3}>: ",
-                p.AdjustLength, 0.001, 0.500, out value)) return false;
-            p.AdjustLength = value;
+                if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
+                    ed, $"\nナット高さ (m) <{p.NutHeight:F3}>: ",
+                    p.NutHeight, 0.001, 0.200, out value)) return false;
+                p.NutHeight = value;
+
+                if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
+                    ed, $"\n調節長 (m) <{p.AdjustLength:F3}>: ",
+                    p.AdjustLength, 0.001, 0.200, out value)) return false;
+                p.AdjustLength = value;
+            }
 
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
                 ed, $"\n取付点反力 Ap (kN/m、0 で張力照査なし) <{p.AnchorReaction:F1}>: ",
@@ -379,15 +423,19 @@ namespace SheetPileQuayWall.Plugin.Commands
                 p.LayerColor, 1, 255, out colorIdx)) return false;
             p.LayerColor = colorIdx;
 
-            // 平面位置は施設延長方向 Y のみ。X は前壁から自動計算する(決定8)
-            double pickedX, pickedY;
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskPlanPoint(
-                ed, "\n1 組目の位置を指定 (Y のみ使用。X は前壁から自動計算): ",
-                out pickedX, out pickedY))
+            // 平面位置は施設延長方向 Y のみ。X は前壁から自動計算する(決定8)。
+            // _Action では保存済み Y を保持する(同位置再生成)ため再ピックしない
+            if (askPlanPoint)
             {
-                return false;
+                double pickedX, pickedY;
+                if (!SheetPileQuayWall.Plugin.Prompt.TryAskPlanPoint(
+                    ed, "\n1 組目の位置を指定 (Y のみ使用。X は前壁から自動計算): ",
+                    out pickedX, out pickedY))
+                {
+                    return false;
+                }
+                positionY = pickedY;
             }
-            positionY = pickedY;
 
             // ── 部材間整合チェック(前壁 ⟺ タイロッド、フェーズ3)───────────
             SheetPileQuayWall.Core.FrontWallRef frontRef = front.ToRef();
@@ -403,6 +451,12 @@ namespace SheetPileQuayWall.Plugin.Commands
             }
 
             return true;
+        }
+
+        private static T ParseEnum<T>(string text, T fallback) where T : struct
+        {
+            T parsed;
+            return System.Enum.TryParse(text, out parsed) ? parsed : fallback;
         }
 
         // 008 の計算層は違反時に例外を投げる。ここで捕捉してエラー停止に変換する。
@@ -506,6 +560,13 @@ namespace SheetPileQuayWall.Plugin.Commands
             ed.WriteMessage($"\n  受杭 (1本あたり): {r.SupportPileCount,10} ヶ所");
             ed.WriteMessage($"\n  受杭合計        : {r.TotalSupportPileCount,10} ヶ所" +
                 $" (受杭対象 {r.SupportedRodCount} 組)");
+            ed.WriteMessage($"\n  鋼種            : {p.Grade,10}");
+            ed.WriteMessage("\n  設計基準        : " +
+                (p.Code == SheetPileQuayWall.Core.TieRod.DesignCode.PartialFactor
+                    ? "部分係数法 (新基準)" : "許容応力度法 (旧基準)"));
+            ed.WriteMessage("\n  荷重状態        : " +
+                (p.State == SheetPileQuayWall.Core.TieRod.LoadState.Normal
+                    ? "常時/永続" : "地震時/変動"));
             ed.WriteMessage($"\n  許容張力        : {r.AllowableTension,10:F1} kN");
 
             if (r.TensionChecked)

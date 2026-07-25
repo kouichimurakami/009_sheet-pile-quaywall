@@ -9,9 +9,10 @@
 > - 2026-07-25 第3版 (b): フェーズ 2(006@6d6d8cf 由来の新規 Core)完了、311 テスト green。§3 に `Point3.cs`・`PileGeometry.cs`・`AnchorPileSteel.cs` を追加。§12 に未解決事項 7(継手質量の側別配分)・8(前壁と控え杭で外径規則が異なる)を追加。
 > - 2026-07-26 第3版 (c): §12 未解決事項 1・6(タイロッドの前壁参照方式、θ 付き前壁との幾何整合)を決定8として解決。タイロッドを目視クリックから前壁選択方式へ変更し、海側取付点の X 座標を `PileGeometry.AxisXAt` で自動計算する(§1・§4・§6・§7.2 を更新)。フェーズ3のブロッカーが解消し、残る未解決は項目2〜5・7・8のみ。
 > - 2026-07-26 第3版 (d): フェーズ 3(部材間整合)完了、323 テスト green。`CrossMemberValidator`(§9 に横断チェック 4 組を追加)と `TieRodPlacement`(決定8)を新設。`FrontWallRef` を Core ルートへ移動し継手形式を追加。008 `SpanLength` の XML コメント(「控工中心まで」)が README の図・算定式・006 の定義と矛盾することを §9 に記録。
-> - 2026-07-26 第3版 (g): フェーズ 5(仕上げ)完了、335 テスト green。§12 項目3(Dynamo 範囲)を決定、項目7(継手質量の側別配分)を `JointShapes` の実形状から解決し、**移植元 007 `JointCatalog.JointMassPerM` が P-P 形で鋼管を 1 本分しか数えないバグを発見**。`FrontWall.JointMass`・`QuayWallEstimate`・`SPQW_QUAYWALL_Estimate`・Dynamo ノード 2 個・README(9 章構成)を追加。残る未解決は記録のみの項目 8。
-> - 2026-07-26 第3版 (f): フェーズ 4(Plugin)完了。XData 3 種(決定9 のキー=値方式)+ コマンド 11 個 + 共通ヘルパー 3 種を実装し、スタブビルドがエラー 0・警告 0。スタブに Polyline/Circle/Region/DBObjectCollection/Point2d/Handle/BooleanOperationType 等を追加。§3・§6 を実装に合わせて更新し、§13.5 に実機手動検証項目 8 件を追加。
 > - 2026-07-26 第3版 (e): フェーズ 4 のブロッカーを一括解決 — 決定9(XData を 008 の キー=値 + `fmt` 方式に統一。§6.1 新設、位置依存とする旧記載を差し替え)、決定10(`_JointModel` は移植しない。コマンド 12→11 個)、決定11(旧 RegApp 図面との互換は持たない)。§12 の項目 2・4・5 が解決し、フェーズ 4 のブロッカーは無くなった。残る未解決はフェーズ 5 の項目 3・7 と、記録のみの項目 8。
+> - 2026-07-26 第3版 (f): フェーズ 4(Plugin)完了。XData 3 種(決定9 のキー=値方式)+ コマンド 11 個 + 共通ヘルパー 3 種を実装し、スタブビルドがエラー 0・警告 0。スタブに Polyline/Circle/Region/DBObjectCollection/Point2d/Handle/BooleanOperationType 等を追加。§3・§6 を実装に合わせて更新し、§13.5 に実機手動検証項目 8 件を追加。
+> - 2026-07-26 第3版 (g): フェーズ 5(仕上げ)完了、335 テスト green。§12 項目3(Dynamo 範囲)を決定、項目7(継手質量の側別配分)を `JointShapes` の実形状から解決し、**移植元 007 `JointCatalog.JointMassPerM` が P-P 形で鋼管を 1 本分しか数えないバグを発見**。`FrontWall.JointMass`・`QuayWallEstimate`・`SPQW_QUAYWALL_Estimate`・Dynamo ノード 2 個・README(9 章構成)を追加。残る未解決は記録のみの項目 8。
+> - 2026-07-26 第3版 (h): 実装後の批判的レビュー指摘を反映 — ① 前壁挿入点を 1011(World 座標点)で併記保存し読み側で優先(決定9 でキー=値の文字列化により失われていた MOVE 追随を復活。§6・§6.1)、② タイロッドの鋼種・設計基準・荷重状態プロンプトを追加(008 `TryGrade`/`TryCode`/`TryState` 相当の移植漏れ修正)し、積算基準表内の径(φ38〜φ65)はナット高さ・調節長を自動設定、③ タイロッドのプロンプト範囲 5 項目を Core 検証範囲に一致、④ §4 に `SPQW_QUAYWALL_Estimate` を追加・Dynamo ノード名を実装(`CalcSection`・`CalcQuayWallQuantity`)に更新・`ProtoGeometry.dll` の参照記載を削除、⑤ `SPQW_ANCHORPILE_Query` に積算数量出力(1 本あたり)を復元(006 同等)、⑥ `SPQW_TIEROD_Action` は Y を保持して同位置再生成(§2.4 整合)。
 
 ## 0. 目的とスコープ
 
@@ -161,9 +162,10 @@
 | `SPQW_TIEROD_Color` | `TAIROD_Color`(008) | 色番号のみ変更 |
 | `SPQW_ANCHORPILE_Create` | `ANCHORPILE_Create`(006) | 前壁選択 → タイロッド軸線に整列した控え杭を生成 |
 | `SPQW_ANCHORPILE_Action` | `ANCHORPILE_Action`(006) | 前壁基準の整列位置に再生成 |
-| `SPQW_ANCHORPILE_Query` | `ANCHORPILE_Query`(006) | 諸元・整列座標・積算数量を出力 |
+| `SPQW_ANCHORPILE_Query` | `ANCHORPILE_Query`(006) | 諸元・整列座標・積算数量(1 本あたり)を出力 |
+| `SPQW_QUAYWALL_Estimate` | (新設。旧版に相当なし) | 岸壁 1 施設分の鋼材質量を 3 部材まとめて集計(フェーズ 5) |
 
-Dynamo ノード(暫定、`SpqwNodes` クラス): `CalcSection`・`CreateSolid`(007 `SpspNodes` 移植)。タイロッド・控え杭のノードは 006/008 でも未実装のため 009 でもフェーズ2以降とする(§11)。
+Dynamo ノード(`SpqwNodes` クラス): `CalcSection`(007 `SpspNodes` 移植)・`CalcQuayWallQuantity`(009 新設)。ジオメトリ生成ノード(007 `CreateSolid` 相当)は移植しない(§12 項目3 の決定)。
 
 ---
 
@@ -175,7 +177,8 @@ Dynamo ノード(暫定、`SpqwNodes` クラス): `CalcSection`・`CreateSolid`(
 | `AcDbMgd.dll` | Database / Solid3d / XData | Plugin |
 | `AcMgd.dll` | Application | Plugin |
 | `DynamoServices.dll` | `MultiReturn` / 警告ログ | Plugin(`ExcludeDynamo` で除外可、007 の方式踏襲) |
-| `ProtoGeometry.dll` | Dynamo ジオメトリ | Plugin(同上) |
+
+`ProtoGeometry.dll` は**参照しない**(Dynamo ノードはジオメトリを扱わない純計算のため。§12 項目3、第3版(g))。
 
 すべて `<Private>False</Private>`。**Core は BCL のみ参照し、上記アセンブリを一切参照しない**(CLAUDE.PRIVATE.md §9 の検証対象外)。バージョンは 006/007/008 と同様に**現時点で未検証**(開発機に AutoCAD 未インストール)。
 
@@ -185,11 +188,11 @@ Dynamo ノード(暫定、`SpqwNodes` クラス): `CalcSection`・`CreateSolid`(
 
 | 部材 | RegApp 名(新) | 参考: 旧 RegApp 名 | 主なフィールド(暫定) |
 |---|---|---|---|
-| 前壁 | `SPQW_FRONTWALL` | `SPSP`(007)/ `STEELPIPEPILE`(006) | `fmt`, `outer_d`, `wall_t`, `length`, `joint`, `grade`, `incl_deg`, `piece_index`, `piece_count`, `color`, `tip_x`/`tip_y`/`tip_z`(杭先端=挿入点。`tip_z` が D.L. 基準の杭先端標高) |
+| 前壁 | `SPQW_FRONTWALL` | `SPSP`(007)/ `STEELPIPEPILE`(006) | `fmt`, `outer_d`, `wall_t`, `length`, `joint`, `grade`, `incl_deg`, `piece_index`, `piece_count`, `color`, `tip_x`/`tip_y`/`tip_z`(杭先端=挿入点。`tip_z` が D.L. 基準の杭先端標高)+ **1011(World 座標点)を併記**(第3版(h)) |
 | タイロッド | `SPQW_TIEROD` | `TAIROD_PARAM`(008) | `fmt` + 008 の 18 項目(`rod_d`, `grade`, `code`, `state`, `span_length`, `pile_d`, `pile_pitch`, `tie_spacing`, `tie_count`, `hwl`, `tie_elev`, `waling_h`, `plate_t`, `washer_t`, `nut_h`, `adjust_l`, `anchor_reaction`, `color`)+ `front_handle`, `pos_y`, `rod_index` |
 | 控え杭 | `SPQW_ANCHORPILE` | `ANCHORPILE`(006) | `fmt`, `outer_d`, `wall_t`, `length`, `incl_deg`, `closed_tip`, `span`, `tie_elev`, `tip_elev`, `color`, `front_handle` |
 
-**位置情報の持ち方(フェーズ4 で確定)**: 前壁のみ挿入点(`tip_x`/`tip_y`/`tip_z`)を保存する。タイロッドと控え杭は**平面 X を保存しない**。前壁 Handle と `span` / `tie_elev` から `_Action` のたびに再計算するため、前壁を MOVE したり傾斜角 θ を変更しても整列位置に追随する(移植元 006 `ANCHORPILE_Action` の「位置は常に前壁+span から導出する」を、決定8 によりタイロッドへも広げたもの)。移植元 008 は `base_x` を保存していたが 009 では持たない。
+**位置情報の持ち方(フェーズ4 で確定、第3版(h) で 1011 併記を追加)**: 前壁のみ挿入点を保存する。キー=値の `tip_x`/`tip_y`/`tip_z` に加えて **DxfCode 1011(World 座標点)を併記**し、読み側は 1011 を優先する。1011 は AutoCAD が MOVE 等の変換に自動追随させるグループコードであり(006 が依存していた特性)、キー=値の文字列だけでは MOVE 追随が失われるため。タイロッドと控え杭は**平面 X を保存しない**。前壁 Handle と `span` / `tie_elev` から `_Action` のたびに再計算するため、前壁を MOVE したり傾斜角 θ を変更しても整列位置に追随する(移植元 006 `ANCHORPILE_Action` の「位置は常に前壁+span から導出する」を、決定8 によりタイロッドへも広げたもの)。移植元 008 は `base_x` を保存していたが 009 では持たない。
 
 ### 6.1 エンコード方式(決定9、第3版(e))
 
@@ -217,6 +220,8 @@ XData (RegApp: SPQW_FRONTWALL)
 | 実績がある | 008 で実装・運用済み |
 
 数値は `System.Globalization.CultureInfo.InvariantCulture` で書式化する(008 と同じ。ロケール依存の小数点で図面が壊れることを防ぐ)。
+
+**位置の 1011 併記(第3版(h) で追加)**: キー=値の文字列は DxfCode 1000 であり、AutoCAD の MOVE 追随(1011 = World space position のみが変換対象)を受けない。決定9 の当初検討ではこの特性喪失を見落としていた(実装後レビューの指摘 A)。対処として、前壁の挿入点は `tip_x`/`tip_y`/`tip_z` に加えて **1011 の点を併記保存し、読み側(`FrontWallRecord.Read`)は 1011 を優先**する。これにより §13.5 検証項目 4(前壁 MOVE 後の `_Action` 追随)が設計上成立する。文字列キーは人間可読なフォールバックとして残す。
 
 ---
 

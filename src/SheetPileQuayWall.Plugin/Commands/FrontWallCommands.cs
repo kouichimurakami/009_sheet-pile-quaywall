@@ -51,7 +51,8 @@ namespace SheetPileQuayWall.Plugin.Commands
 
         // ════════════════════════════════════════════════════════════════════
         // SPQW_FRONTWALL_Action: 既存選択 → 再入力 → 同位置に再生成
-        // 平面位置は XData の値を保持する(MOVE 後も XData を書き換えない限り不変)
+        // 挿入点は XData の 1011(World 座標点)を優先して読むため、MOVE 後は
+        // 移動先に追随して再生成される(006 の挿入点追随を維持)
         // ════════════════════════════════════════════════════════════════════
         [Autodesk.AutoCAD.Runtime.CommandMethod("SPQW_FRONTWALL_Action")]
         public static void Action()
@@ -80,7 +81,8 @@ namespace SheetPileQuayWall.Plugin.Commands
                 return;
             }
 
-            // 平面位置は再ピックせず保持する。標高・諸元のみ再入力する。
+            // 平面位置は再ピックせず保持する(MOVE 済みなら 1011 由来の現在位置)。
+            // 標高・諸元のみ再入力する。
             if (!PromptRecord(ed, stored, askPlanPoint: false))
             {
                 return;

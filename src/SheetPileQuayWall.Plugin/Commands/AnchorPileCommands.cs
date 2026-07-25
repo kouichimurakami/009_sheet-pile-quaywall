@@ -403,6 +403,29 @@ namespace SheetPileQuayWall.Plugin.Commands
             ed.WriteMessage($"\n  タイロッド軸心 Z_tr: {a.TieElevM,7:F3} m (D.L.)");
             ed.WriteMessage($"\n  杭先端標高 Z_tip: {a.TipElevM,10:F3} m (D.L.)");
             ed.WriteMessage("\n  継手            : なし(控え杭は単独杭)");
+
+            // 積算数量(1 本あたり)。移植元 006 ANCHORPILE_Query と同じ出力。
+            // 式は QuayWallEstimate に一本化し、1 本分の構成で呼び出す
+            SheetPileQuayWall.Core.QuayWallQuantity q =
+                SheetPileQuayWall.Core.QuayWallEstimate.Compute(
+                    new SheetPileQuayWall.Core.QuayWallComposition
+                    {
+                        FrontPieceCount = 0,
+                        AnchorPileCount = 1,
+                        AnchorOuterDm = a.OuterDm,
+                        AnchorWallTm = a.WallTm,
+                        AnchorLengthM = a.LengthM,
+                        AnchorClosedTip = a.ClosedTip
+                    });
+
+            ed.WriteMessage("\n--- 積算数量 (1 本あたり) ---");
+            ed.WriteMessage($"\n  鋼管本体        : {q.AnchorBodyKg,10:F1} kg  [確定](K011 単位重量 × L)");
+            if (a.ClosedTip)
+            {
+                ed.WriteMessage($"\n  底板 (閉端)     : {q.AnchorPlateKg,10:F1} kg  [概算](π/4·D²·t、密度 7.85 g/cm³)");
+            }
+            ed.WriteMessage($"\n  合計            : {q.AnchorTotalKg,10:F1} kg = " +
+                $"{q.AnchorTotalKg / 1000.0:F3} t");
         }
 
         private static void PrintSummary(

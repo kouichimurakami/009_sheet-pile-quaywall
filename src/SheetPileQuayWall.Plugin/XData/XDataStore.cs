@@ -112,6 +112,19 @@ namespace SheetPileQuayWall.Plugin.XData
             AddReal(values, keyPrefix + "_z", point.Z);
         }
 
+        // World 座標点(DxfCode 1011)。AutoCAD が MOVE 等の変換に自動追随させる
+        // グループコードであり、006 の挿入点追随はこれに依存していた。
+        // キー=値の文字列は追随しないため、位置は 1011 を併記し読み側で優先する。
+        public static void AddWorldPoint(
+            System.Collections.Generic.List<
+                Autodesk.AutoCAD.DatabaseServices.TypedValue> values,
+            SheetPileQuayWall.Core.Point3 point)
+        {
+            values.Add(new Autodesk.AutoCAD.DatabaseServices.TypedValue(
+                (int)Autodesk.AutoCAD.DatabaseServices.DxfCode.ExtendedDataWorldXCoordinate,
+                new Autodesk.AutoCAD.Geometry.Point3d(point.X, point.Y, point.Z)));
+        }
+
         public static Autodesk.AutoCAD.DatabaseServices.ResultBuffer ToBuffer(
             System.Collections.Generic.List<
                 Autodesk.AutoCAD.DatabaseServices.TypedValue> values)
@@ -224,6 +237,54 @@ namespace SheetPileQuayWall.Plugin.XData
             }
 
             return value == "1";
+        }
+
+        // 指定 RegApp のセクションから最初の 1011(World 座標点)を読む。
+        // MOVE 後は AutoCAD が変換済みの値を返すため、文字列キーより現在位置に忠実。
+        public static bool TryReadWorldPoint(
+            Autodesk.AutoCAD.DatabaseServices.Entity entity, string regAppName,
+            out SheetPileQuayWall.Core.Point3 point)
+        {
+            point = new SheetPileQuayWall.Core.Point3(0.0, 0.0, 0.0);
+
+            Autodesk.AutoCAD.DatabaseServices.ResultBuffer buffer =
+                entity.GetXDataForApplication(regAppName);
+            if (buffer == null)
+            {
+                return false;
+            }
+
+            bool inOurSection = false;
+            bool found = false;
+
+            Autodesk.AutoCAD.DatabaseServices.TypedValue[] items = buffer.AsArray();
+            for (int i = 0; i < items.Length; i++)
+            {
+                if (items[i].TypeCode ==
+                    (short)Autodesk.AutoCAD.DatabaseServices.DxfCode.ExtendedDataRegAppName)
+                {
+                    inOurSection = string.Equals(items[i].Value as string, regAppName);
+                    continue;
+                }
+
+                if (!inOurSection)
+                {
+                    continue;
+                }
+
+                if (items[i].TypeCode ==
+                    (short)Autodesk.AutoCAD.DatabaseServices.DxfCode
+                        .ExtendedDataWorldXCoordinate &&
+                    items[i].Value is Autodesk.AutoCAD.Geometry.Point3d p)
+                {
+                    point = new SheetPileQuayWall.Core.Point3(p.X, p.Y, p.Z);
+                    found = true;
+                    break;
+                }
+            }
+
+            buffer.Dispose();
+            return found;
         }
 
         public static SheetPileQuayWall.Core.Point3 ReadPoint(
