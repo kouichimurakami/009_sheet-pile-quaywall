@@ -1,0 +1,72 @@
+# ===== 機密情報 (絶対にコミットしない) =====
+.claude/
+.claude.json
+.env
+*.pem
+*.key
+*_secret*
+secrets/
+
+# ===== 一時ファイル =====
+*.tmp
+*.bak
+*~
+.gitignore.tmp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== AutoCAD / Civil 3D =====
+*.dwl
+*.dwl2
+*.sv$
+*.ac$
+*.err
+*.log
+
+# ===== .NET ビルド出力 =====
+bin/
+obj/
+*.dll
+*.pdb
+*.exe
+*.cache
+*.user
+*.suo
+.vs/
+
+# ===== Python (Vision API スクリプト用) =====
+__pycache__/
+*.pyc
+venv/
+.venv/
+*.egg-info/
+
+# ===== Node.js (MCP サーバー用) =====
+node_modules/
+npm-debug.log*
+
+# ===== エディタ =====
+.vscode
+.vscode/
+.idea
+.idea/
+*.swp
+
+# ===== シェル / 環境設定 (ローカル環境固有) =====
+.bash_profile
+.bashrc
+.profile
+.zprofile
+.zshrc
+.gitconfig
+.gitmodules
+.ripgreprc
+.mcp.json
+
+# ===== Dynamo =====
+*.dyn.bak
+backup/
+
+# ===== 入力資料 PDF (別フォルダ管理) =====
+*.pdf
