@@ -9,6 +9,7 @@
 > - 2026-07-25 第3版 (b): フェーズ 2(006@6d6d8cf 由来の新規 Core)完了、311 テスト green。§3 に `Point3.cs`・`PileGeometry.cs`・`AnchorPileSteel.cs` を追加。§12 に未解決事項 7(継手質量の側別配分)・8(前壁と控え杭で外径規則が異なる)を追加。
 > - 2026-07-26 第3版 (c): §12 未解決事項 1・6(タイロッドの前壁参照方式、θ 付き前壁との幾何整合)を決定8として解決。タイロッドを目視クリックから前壁選択方式へ変更し、海側取付点の X 座標を `PileGeometry.AxisXAt` で自動計算する(§1・§4・§6・§7.2 を更新)。フェーズ3のブロッカーが解消し、残る未解決は項目2〜5・7・8のみ。
 > - 2026-07-26 第3版 (d): フェーズ 3(部材間整合)完了、323 テスト green。`CrossMemberValidator`(§9 に横断チェック 4 組を追加)と `TieRodPlacement`(決定8)を新設。`FrontWallRef` を Core ルートへ移動し継手形式を追加。008 `SpanLength` の XML コメント(「控工中心まで」)が README の図・算定式・006 の定義と矛盾することを §9 に記録。
+> - 2026-07-26 第3版 (f): フェーズ 4(Plugin)完了。XData 3 種(決定9 のキー=値方式)+ コマンド 11 個 + 共通ヘルパー 3 種を実装し、スタブビルドがエラー 0・警告 0。スタブに Polyline/Circle/Region/DBObjectCollection/Point2d/Handle/BooleanOperationType 等を追加。§3・§6 を実装に合わせて更新し、§13.5 に実機手動検証項目 8 件を追加。
 > - 2026-07-26 第3版 (e): フェーズ 4 のブロッカーを一括解決 — 決定9(XData を 008 の キー=値 + `fmt` 方式に統一。§6.1 新設、位置依存とする旧記載を差し替え)、決定10(`_JointModel` は移植しない。コマンド 12→11 個)、決定11(旧 RegApp 図面との互換は持たない)。§12 の項目 2・4・5 が解決し、フェーズ 4 のブロッカーは無くなった。残る未解決はフェーズ 5 の項目 3・7 と、記録のみの項目 8。
 
 ## 0. 目的とスコープ
@@ -119,13 +120,18 @@
 │   │
 │   └── SheetPileQuayWall.Plugin/          ← AutoCAD / Civil3D / Dynamo 依存
 │       ├── Commands/
-│       │   ├── FrontWall_Create.cs / _Action.cs / _Query.cs / _Estimate.cs / _JointModel.cs
-│       │   ├── TieRod_Create.cs / _Action.cs / _Query.cs / _Color.cs
-│       │   └── AnchorPile_Create.cs / _Action.cs / _Query.cs
+│       │   ├── FrontWallCommands.cs         SPQW_FRONTWALL_Create / _Action / _Query / _Estimate
+│       │   ├── TieRodCommands.cs            SPQW_TIEROD_Create / _Action / _Query / _Color(決定8 の前壁選択方式)
+│       │   └── AnchorPileCommands.cs        SPQW_ANCHORPILE_Create / _Action / _Query
 │       ├── XData/
-│       │   ├── FrontWallXData.cs / TieRodXData.cs / AnchorPileXData.cs
-│       ├── Dynamo/
-│       │   └── SpqwNodes.cs
+│       │   ├── XDataStore.cs                キー=値 の読み書き基盤(決定9、§6.1)
+│       │   ├── FrontWallRecord.cs           RegApp SPQW_FRONTWALL
+│       │   ├── TieRodRecord.cs              RegApp SPQW_TIEROD(前壁 Handle 参照を持つ)
+│       │   └── AnchorPileRecord.cs          RegApp SPQW_ANCHORPILE(同上)
+│       ├── DrawingHelper.cs                 レイヤー作成・モデル空間追加・選択・Handle 解決
+│       ├── Prompt.cs                        対話入力(mm→m 変換の境界。決定7)
+│       ├── SolidBuilder.cs                  断面→Region→Extrude(継手部材の押し出しを含む)
+│       ├── Dynamo/                          【フェーズ5】SpqwNodes.cs
 │       └── SheetPileQuayWall.Plugin.csproj  net8.0-windows、Core を ProjectReference
 │
 ├── tests/SheetPileQuayWall.Core.Tests/     007(8ファイル・103件)+ 008(4ファイル・172件)相当を移植・再編 + 新規モジュール分
@@ -178,9 +184,11 @@ Dynamo ノード(暫定、`SpqwNodes` クラス): `CalcSection`・`CreateSolid`(
 
 | 部材 | RegApp 名(新) | 参考: 旧 RegApp 名 | 主なフィールド(暫定) |
 |---|---|---|---|
-| 前壁 | `SPQW_FRONTWALL` | `SPSP`(007)/ `STEELPIPEPILE`(006) | D, t, L, 継手コード, 鋼種(007)+ 傾斜角θ・施工順位・総本数・色(006)+ 挿入点1011(平面位置+D.L.標高) |
-| タイロッド | `SPQW_TIEROD` | `TAIROD_PARAM`(008) | 008 の18項目 + 配置位置(base_x/base_y)+ rod_index(そのまま踏襲)+ **前壁Handle参照(決定8で追加。控え杭と同じ方式で `_Action` 再生成時に前壁の現在位置・θ・Z_tipへ追随させる)** |
-| 控え杭 | `SPQW_ANCHORPILE` | `ANCHORPILE`(006) | D, t, L, θ, span, Z_tr, 先端形状, 色, 前壁Handle参照, 挿入点1011 |
+| 前壁 | `SPQW_FRONTWALL` | `SPSP`(007)/ `STEELPIPEPILE`(006) | `fmt`, `outer_d`, `wall_t`, `length`, `joint`, `grade`, `incl_deg`, `piece_index`, `piece_count`, `color`, `tip_x`/`tip_y`/`tip_z`(杭先端=挿入点。`tip_z` が D.L. 基準の杭先端標高) |
+| タイロッド | `SPQW_TIEROD` | `TAIROD_PARAM`(008) | `fmt` + 008 の 18 項目(`rod_d`, `grade`, `code`, `state`, `span_length`, `pile_d`, `pile_pitch`, `tie_spacing`, `tie_count`, `hwl`, `tie_elev`, `waling_h`, `plate_t`, `washer_t`, `nut_h`, `adjust_l`, `anchor_reaction`, `color`)+ `front_handle`, `pos_y`, `rod_index` |
+| 控え杭 | `SPQW_ANCHORPILE` | `ANCHORPILE`(006) | `fmt`, `outer_d`, `wall_t`, `length`, `incl_deg`, `closed_tip`, `span`, `tie_elev`, `tip_elev`, `color`, `front_handle` |
+
+**位置情報の持ち方(フェーズ4 で確定)**: 前壁のみ挿入点(`tip_x`/`tip_y`/`tip_z`)を保存する。タイロッドと控え杭は**平面 X を保存しない**。前壁 Handle と `span` / `tie_elev` から `_Action` のたびに再計算するため、前壁を MOVE したり傾斜角 θ を変更しても整列位置に追随する(移植元 006 `ANCHORPILE_Action` の「位置は常に前壁+span から導出する」を、決定8 によりタイロッドへも広げたもの)。移植元 008 は `base_x` を保存していたが 009 では持たない。
 
 ### 6.1 エンコード方式(決定9、第3版(e))
 
@@ -340,7 +348,7 @@ XData (RegApp: SPQW_FRONTWALL)
 | **1. 移植のみの Core** | 007 `src/Data` 8 ファイル → `Core/FrontWall`、008 `TaiRod.Core` 5 ファイル → `Core/TieRod`、テスト 12 ファイル | `dotnet test` で **275/275 pass** | なし | **完了 2026-07-25** |
 | **2. 006 由来の新規 Core** | `PieceAssignment` / `FrontWallPlacement` / `AnchorAlignment` を `006@6d6d8cf` から抽出。`ed.WriteMessage` 依存を `string?` 返却へ、`Point3d` を独自 struct へ置換 | `dotnet test` で **311/311 pass**(275 移植 + 36 新規) | なし | **完了 2026-07-25** |
 | **3. 部材間整合** | `CrossMemberValidator` 新設(§9 の横断チェック 4 組)、`TieRodPlacement` 新設(決定8 の θ 補正)、`FrontWallRef` を Core ルートへ移動し継手形式を追加 | `dotnet test` で **323/323 pass**(311 + 新規 12) | なし(項目1・6 は決定8で解決済み) | **完了 2026-07-26** |
-| **4. Plugin** | XData 3 種(決定9 の キー=値 方式)、コマンド **11 個**(決定10 で `_JointModel` を削除)。前壁 → タイロッド → 控え杭の順。タイロッドは決定8により前壁選択方式で実装(008 の目視クリックからの書き直し)。旧図面の互換は持たない(決定11) | スタブビルド成功 + XData の書式・キー名レビュー。実機確認は別途 | **なし**(項目2・4・5 は決定9〜11 で解決済み) | 未着手 |
+| **4. Plugin** | XData 3 種(決定9 の キー=値 方式)、コマンド **11 個**(決定10 で `_JointModel` を削除)。前壁 → タイロッド → 控え杭の順。タイロッドは決定8により前壁選択方式で実装(008 の目視クリックからの書き直し)。旧図面の互換は持たない(決定11) | スタブビルドが **エラー 0・警告 0**(スタブ使用の意図的な警告を除く)。コマンド 11 個の登録確認。XData の書き込みキーと読み取りキーの完全一致を確認。**実機確認は未実施**(AutoCAD 未インストール) | **なし**(項目2・4・5 は決定9〜11 で解決済み) | **完了 2026-07-26** |
 | **5. 仕上げ** | Dynamo ノード、岸壁 1 施設分の統合積算、README(§7 の 9 章構成) | Dynamo の MultiReturn キー数一致 | 3 | 未着手 |
 
 フェーズ 0〜2 は §12 の未解決事項の影響を受けない(未解決 5 件はいずれもコマンド名・XData・部材間参照方式に関わり、Core の数値ロジックには波及しないため)。
@@ -360,7 +368,22 @@ XData (RegApp: SPQW_FRONTWALL)
 
 `CrossMemberValidator` のピッチ照合テストは、継手有効間隔 J が D 非依存(0.2478 m)で期待値を厳密に書ける P-P 形を用いる(D=1.000 m → 有効幅 B=1.2478 m)。
 
-「XData 位置追随(MOVE 後の再生成一致)」は AutoCAD ランタイムの挙動であり Core では検証できないため、§10 のテスト計画から外し、フェーズ 4 の実機手動検証項目とする。
+「XData 位置追随(MOVE 後の再生成一致)」は AutoCAD ランタイムの挙動であり Core では検証できないため、§10 のテスト計画から外し、実機手動検証項目とする。
+
+### 13.5 実機手動検証項目(AutoCAD 2025 / Civil 3D 2025 の環境で実施)
+
+Plugin 層はスタブによる構文・型検証までしか自動化できない。以下は実機で確認する。
+
+| # | 手順 | 期待結果 |
+|---|---|---|
+| 1 | `scripts/verify-dll-versions.ps1` を実行 | exit 0(DLL バージョン一致)。**これが通るまで配布しない**(CLAUDE.PRIVATE.md §9) |
+| 2 | `SPQW_FRONTWALL_Create` を θ=0 で実行 | 「前壁鋼管矢板」レイヤーに Solid3d 1 個。継手は施工順位に応じた側だけに付く(1/5 なら +Y 側のみ) |
+| 3 | 同じ前壁を `SPQW_FRONTWALL_Action` で再生成 | 平面位置が変わらない。諸元だけが更新される |
+| 4 | 前壁を MOVE してから `SPQW_TIEROD_Action` / `SPQW_ANCHORPILE_Action` | タイロッド・控え杭が前壁の新しい位置に整列し直す |
+| 5 | `SPQW_FRONTWALL_Create` を θ=15° で実行し `SPQW_TIEROD_Create` | タイロッドの海側端が、傾斜した前壁のタイロッド軸心標高での軸位置に一致する(決定8。目視で前壁中心をクリックしていた 008 では合わなかった箇所) |
+| 6 | 前壁と径・ピッチが食い違うタイロッドを作成 | `CrossMemberValidator` がエラー停止し、ソリッドを生成しない |
+| 7 | `SPQW_TIEROD_Color` で色変更 | ソリッドの色と XData の `color` が両方変わる |
+| 8 | 生成済みソリッドを再度 `_Query` | 保存した値がそのまま読み出せる(キー=値方式の往復確認) |
 
 ### 13.4 移植の再現手順
 

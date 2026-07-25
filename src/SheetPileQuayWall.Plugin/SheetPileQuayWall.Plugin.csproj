@@ -22,8 +22,12 @@
   <PropertyGroup>
     <TargetFramework>net8.0-windows</TargetFramework>
     <LangVersion>latest</LangVersion>
-    <!-- AutoCAD API は null 注釈が付いていないため無効化する。 -->
-    <Nullable>disable</Nullable>
+    <!--
+      AutoCAD API は null 注釈が付いていないため null 状態解析は行わない。
+      ただし ? 構文は自前のコードで意図を示すために使うので annotations を選ぶ
+      (disable にすると CS8632 が出る)。
+    -->
+    <Nullable>annotations</Nullable>
     <!-- CLAUDE.PRIVATE.md §2.1: using ディレクティブを使わない。 -->
     <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>SheetPileQuayWall.Plugin</AssemblyName>

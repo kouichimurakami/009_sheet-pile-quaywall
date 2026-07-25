@@ -24,6 +24,13 @@ namespace Autodesk.AutoCAD.Runtime
 
 namespace Autodesk.AutoCAD.Geometry
 {
+    public struct Point2d
+    {
+        public Point2d(double x, double y) { X = x; Y = y; }
+        public double X { get; }
+        public double Y { get; }
+    }
+
     public struct Point3d
     {
         public Point3d(double x, double y, double z) { X = x; Y = y; Z = z; }
@@ -44,7 +51,9 @@ namespace Autodesk.AutoCAD.Geometry
         public double X { get; }
         public double Y { get; }
         public double Z { get; }
+        public static Vector3d XAxis { get { return new Vector3d(1.0, 0.0, 0.0); } }
         public static Vector3d YAxis { get { return new Vector3d(0.0, 1.0, 0.0); } }
+        public static Vector3d ZAxis { get { return new Vector3d(0.0, 0.0, 1.0); } }
     }
 
     public struct Matrix3d
@@ -97,6 +106,31 @@ namespace Autodesk.AutoCAD.DatabaseServices
     public struct ObjectId
     {
         public bool IsNull { get { return false; } }
+        public bool IsErased { get { return false; } }
+    }
+
+    public struct Handle
+    {
+        public Handle(long value) { Value = value; }
+        public long Value { get; }
+        public override string ToString() { return Value.ToString("X"); }
+    }
+
+    public enum BooleanOperationType { BoolUnite, BoolIntersect, BoolSubtract }
+
+    // Region.CreateFromCurves / Solid3d.Extrude が扱うカーブ集合
+    public sealed class DBObjectCollection : System.Collections.IEnumerable
+    {
+        public void Add(DBObject value) { }
+        public int Count { get { return 0; } }
+        public DBObject this[int index]
+        {
+            get { throw new System.NotSupportedException("AutoCAD スタブです。"); }
+        }
+        public System.Collections.IEnumerator GetEnumerator()
+        {
+            throw new System.NotSupportedException("AutoCAD スタブです。");
+        }
     }
 
     public struct TypedValue
@@ -141,9 +175,69 @@ namespace Autodesk.AutoCAD.DatabaseServices
             set { throw new System.NotSupportedException("AutoCAD スタブです。"); }
         }
 
+        public int ColorIndex
+        {
+            get { throw new System.NotSupportedException("AutoCAD スタブです。"); }
+            set { throw new System.NotSupportedException("AutoCAD スタブです。"); }
+        }
+
+        public Handle Handle
+        {
+            get { throw new System.NotSupportedException("AutoCAD スタブです。"); }
+        }
+
+        public ObjectId ObjectId
+        {
+            get { throw new System.NotSupportedException("AutoCAD スタブです。"); }
+        }
+
         public void Erase() { throw new System.NotSupportedException("AutoCAD スタブです。"); }
 
+        public void UpgradeOpen() { throw new System.NotSupportedException("AutoCAD スタブです。"); }
+
+        public ResultBuffer GetXDataForApplication(string regAppName)
+        {
+            throw new System.NotSupportedException("AutoCAD スタブです。");
+        }
+
         public void TransformBy(Autodesk.AutoCAD.Geometry.Matrix3d transform)
+        {
+            throw new System.NotSupportedException("AutoCAD スタブです。");
+        }
+    }
+
+    // 閉じた 2D プロファイル。頂点は m 単位。
+    public sealed class Polyline : Entity
+    {
+        public void AddVertexAt(int index, Autodesk.AutoCAD.Geometry.Point2d point,
+            double bulge, double startWidth, double endWidth)
+        {
+            throw new System.NotSupportedException("AutoCAD スタブです。");
+        }
+
+        public bool Closed
+        {
+            get { throw new System.NotSupportedException("AutoCAD スタブです。"); }
+            set { throw new System.NotSupportedException("AutoCAD スタブです。"); }
+        }
+    }
+
+    public sealed class Circle : Entity
+    {
+        public Circle(Autodesk.AutoCAD.Geometry.Point3d center,
+            Autodesk.AutoCAD.Geometry.Vector3d normal, double radius)
+        {
+        }
+    }
+
+    public sealed class Region : Entity
+    {
+        public static DBObjectCollection CreateFromCurves(DBObjectCollection curves)
+        {
+            throw new System.NotSupportedException("AutoCAD スタブです。");
+        }
+
+        public void BooleanOperation(BooleanOperationType operation, Region other)
         {
             throw new System.NotSupportedException("AutoCAD スタブです。");
         }
@@ -152,6 +246,16 @@ namespace Autodesk.AutoCAD.DatabaseServices
     public sealed class Solid3d : Entity
     {
         public void CreateFrustum(double height, double xRadius, double yRadius, double topRadius)
+        {
+            throw new System.NotSupportedException("AutoCAD スタブです。");
+        }
+
+        public void Extrude(Region region, double height, double taperAngle)
+        {
+            throw new System.NotSupportedException("AutoCAD スタブです。");
+        }
+
+        public void BooleanOperation(BooleanOperationType operation, Solid3d other)
         {
             throw new System.NotSupportedException("AutoCAD スタブです。");
         }
@@ -255,6 +359,11 @@ namespace Autodesk.AutoCAD.DatabaseServices
 
     public sealed class Database
     {
+        public bool TryGetObjectId(Handle handle, out ObjectId id)
+        {
+            throw new System.NotSupportedException("AutoCAD スタブです。");
+        }
+
         public TransactionManager TransactionManager
         {
             get { throw new System.NotSupportedException("AutoCAD スタブです。"); }
