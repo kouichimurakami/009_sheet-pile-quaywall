@@ -133,15 +133,21 @@ https://help.autodesk.com/view/CIV3D/2025/JPN/?guid=GUID-ECDDB244-F5B9-4FFF-AF02
 
 ## 5. ビルド
 
-WSL 環境に .NET SDK を未インストールの場合Windows 側で Visual Studio 2026 を使ってビルドする。**コード変更時は構文レベルのレビューに留める**。
+Core 層(AutoCAD 非依存)は WSL の .NET SDK でビルド・テスト実行まで可能。Plugin 層は AutoCAD 未インストールのため**スタブによる構文検証まで**で、実機動作確認は AutoCAD をインストールした Windows 環境で行う。
 
 ```bash
-# スタブが必要な場合(AutoCAD API 未インストール環境)
-cd stubs && dotnet build build_stubs.csproj -c Release
+# Core + テスト(AutoCAD 不要。275 件が green であること)
+dotnet test tests/SheetPileQuayWall.Core.Tests
 
-# プラグイン本体
-cd src/<ProjectName> && dotnet build -c Release
+# Plugin の構文検証(AutoCAD 不要。スタブとリンクする)
+dotnet build src/SheetPileQuayWall.Plugin/SheetPileQuayWall.Plugin.csproj -c Release -p:UseAutoCadStubs=true
+
+# Plugin の実機ビルド(AutoCAD 必須。事前に §9 の DLL 検証を実行すること)
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-dll-versions.ps1
+dotnet build src/SheetPileQuayWall.Plugin/SheetPileQuayWall.Plugin.csproj -c Release
 ```
+
+WSL に .NET SDK が無い環境では Windows 側の Visual Studio 2026 を使い、**コード変更時は構文レベルのレビューに留める**。
 
 ---
 

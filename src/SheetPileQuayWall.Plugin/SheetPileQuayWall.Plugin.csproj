@@ -1,0 +1,77 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    === 参照DLLバージョン: 未検証 ===
+    AutoCAD 2025 / Civil 3D 2025 が未インストールのため、実 DLL のバージョン実測が
+    できていない（scripts/verify-dll-versions.ps1 → exit 2 未検出、検証日 2026-07-25）。
+    CLAUDE.PRIVATE.md §9.3 に従い、実機ビルド前に必ず同スクリプトを実行すること。
+
+    ビルド方法:
+      スタブ（構文検証のみ。AutoCAD 不要）:
+        dotnet build src/SheetPileQuayWall.Plugin/SheetPileQuayWall.Plugin.csproj -c Release -p:UseAutoCadStubs=true
+      実機（配布用）:
+        dotnet build src/SheetPileQuayWall.Plugin/SheetPileQuayWall.Plugin.csproj -c Release
+        ※ 事前に scripts/verify-dll-versions.ps1 が exit 0 になることを確認すること。
+        ※ AutoCAD が既定パス以外の場合は -p:AcadRoot="..." を指定する。
+
+    現状（フェーズ 0）: ソースファイルは未追加。コマンド・XData はフェーズ 4 で実装する。
+    Dynamo 参照（DynamoServices / ProtoGeometry）は Dynamo の対象範囲が未確定のため
+    追加していない（docs/implementation-plan.md §12.3）。フェーズ 5 で決定後に追加する。
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <!-- AutoCAD API は null 注釈が付いていないため無効化する。 -->
+    <Nullable>disable</Nullable>
+    <!-- CLAUDE.PRIVATE.md §2.1: using ディレクティブを使わない。 -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>SheetPileQuayWall.Plugin</AssemblyName>
+    <RootNamespace>SheetPileQuayWall.Plugin</RootNamespace>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <AcadRoot Condition="'$(AcadRoot)' == ''">C:\Program Files\Autodesk\AutoCAD 2025</AcadRoot>
+    <UseAutoCadStubs Condition="'$(UseAutoCadStubs)' == ''">false</UseAutoCadStubs>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SheetPileQuayWall.Core\SheetPileQuayWall.Core.csproj" />
+  </ItemGroup>
+
+  <!-- 構文検証用スタブ。配布物には決して含めないこと。 -->
+  <ItemGroup Condition="'$(UseAutoCadStubs)' == 'true'">
+    <ProjectReference Include="..\..\stubs\build_stubs.csproj" />
+  </ItemGroup>
+
+  <!-- 実機ビルド。Copy Local = False 必須（CLAUDE.PRIVATE.md §2.1 / §8）。 -->
+  <ItemGroup Condition="'$(UseAutoCadStubs)' != 'true'">
+    <Reference Include="AcCoreMgd">
+      <HintPath>$(AcadRoot)\AcCoreMgd.dll</HintPath>
+      <Private>False</Private>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
+    <Reference Include="AcDbMgd">
+      <HintPath>$(AcadRoot)\AcDbMgd.dll</HintPath>
+      <Private>False</Private>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
+    <Reference Include="AcMgd">
+      <HintPath>$(AcadRoot)\AcMgd.dll</HintPath>
+      <Private>False</Private>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
+  </ItemGroup>
+
+  <!-- スタブ出力には AutoCadStubs.dll が含まれる。配布物と取り違えないよう毎回警告する。 -->
+  <Target Name="WarnOnStubBuild" BeforeTargets="Build" Condition="'$(UseAutoCadStubs)' == 'true'">
+    <Warning Text="AutoCAD スタブでビルドしています。出力は構文検証専用です。AutoCadStubs.dll を含むため配布してはいけません。" />
+  </Target>
+
+  <!-- 参照 DLL が無い場合、型解決エラーの連鎖ではなく原因を一行で示す。 -->
+  <Target Name="CheckAutoCadReferences" BeforeTargets="ResolveAssemblyReferences"
+          Condition="'$(UseAutoCadStubs)' != 'true'">
+    <Error Condition="!Exists('$(AcadRoot)\AcDbMgd.dll')"
+           Text="AutoCAD 参照 DLL が見つかりません: $(AcadRoot)。scripts/verify-dll-versions.ps1 で環境を確認するか、構文検証のみなら -p:UseAutoCadStubs=true を指定してください。" />
+  </Target>
+
+</Project>

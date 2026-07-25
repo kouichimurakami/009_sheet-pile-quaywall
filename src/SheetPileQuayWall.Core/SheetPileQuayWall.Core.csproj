@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    === 参照DLLバージョン検証: 不要 ===
+    本プロジェクトは AutoCAD / Civil 3D / Dynamo のアセンブリを一切参照しない。
+    参照は .NET 8.0 BCL のみであり、CLAUDE.PRIVATE.md §9 の検証対象外
+    (docs/implementation-plan.md §5)。
+
+    この AutoCAD 非依存性は意図的な設計であり、維持すること。これにより
+    移植元 007 では実行できなかった Core 層のテストが、AutoCAD 未インストールの
+    環境でも `dotnet test` で実行できる。
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <!-- CLAUDE.PRIVATE.md §2.1: using ディレクティブを使わない。暗黙 using も禁止する。 -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>SheetPileQuayWall.Core</AssemblyName>
+    <RootNamespace>SheetPileQuayWall.Core</RootNamespace>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

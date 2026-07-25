@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    AutoCAD / Civil 3D 2025 の API スタブ。
+    実機が無い環境でプラグイン層の「構文・型レベル」の検証を行うためだけに存在する。
+
+    警告: 本アセンブリを配布物に含めてはならない。
+          実行時にロードされた場合は NotSupportedException で必ず失敗する設計にしてある。
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>AutoCadStubs</AssemblyName>
+    <RootNamespace>AutoCadStubs</RootNamespace>
+    <NoWarn>CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>
