@@ -468,11 +468,11 @@
     <dl class="facts">
       <div>
         <dt>Commands</dt>
-        <dd>18<small>個</small></dd>
+        <dd>19<small>個</small></dd>
       </div>
       <div>
         <dt>Core Tests</dt>
-        <dd>524<small>件 green</small></dd>
+        <dd>585<small>件 green</small></dd>
       </div>
       <div>
         <dt>Target</dt>
@@ -480,7 +480,7 @@
       </div>
       <div>
         <dt>Dynamo</dt>
-        <dd>3.3<small>Zero Touch</small></dd>
+        <dd>3.3<small>Zero Touch × 3</small></dd>
       </div>
     </dl>
   </header>
@@ -611,6 +611,10 @@
               <td>諸元・整列座標・杭面間浄距離・積算数量(1 本あたり)を出力</td>
             </tr>
             <tr>
+              <td class="cmd"><code>SPQW_ANCHORPILE_Estimate</code></td>
+              <td>打撃工法の打設歩掛積算 <span class="pill ok">4節 3-4.6</span>(控え杭は鋼杭式。<strong>陸上打設のみ</strong>)</td>
+            </tr>
+            <tr>
               <td class="cmd"><code>SPQW_QUAYWALL_Estimate</code></td>
               <td>代表部材を選択し、岸壁 1 施設分の鋼材質量を 3 部材まとめて集計</td>
             </tr>
@@ -726,6 +730,46 @@
         ジェット併用の適用範囲は外径 1,500 mm 以下・全長 40 m 以下(3-1-3 注3)。
       </p>
 
+      <h3>控え杭は前壁と節が違う</h3>
+      <p>
+        控え杭は継手を持たない単独の鋼管杭であるため、<code>SPQW_ANCHORPILE_Estimate</code> は前壁の
+        4節 3-4.5(鋼矢板式)ではなく <strong>4節 3-4.6(鋼杭式)</strong> に基づく。貫入抵抗値 R・ハンマ規格・
+        打撃速度 Sb・溶接時間・準備時間・基準作業能力係数は両節で数値まで完全一致するため共有実装を再利用しているが、
+        <strong>1 本当り打撃時間 Tb の係数 K だけは異なる</strong>。前壁側の 3-4.5 は「直杭 K=1.0」しか
+        定義していないのに対し、控え杭側の 3-4.6 は「直杭 K=1.0・斜杭 K=1.2」を明記している。控え杭は
+        傾斜角を持つ用途(タイロッド軸線への整列)があるため、この斜杭補正は無視できない。本コマンドは
+        <strong>陸上打設のみ</strong>(3-4.6 の海上打設は未実装)。
+      </p>
+
+      <h3>付帯船舶(台船・引船・揚錨船・潜水士船)</h3>
+      <p>
+        振動工法の 2 コマンドは、バイブロ規格から決まる主船(起重機船・杭打船)に加えて、
+        <strong>杭の全長から選定する台船・引船</strong>、規格が固定の揚錨船・潜水士船も出力する。
+        いずれも基準原文(4節 3-4.6-6「作業船・機械の組合せ」)を根拠とし、16節 3-1(ジェット併用)・
+        3-2(バイブロ単独)の双方が同じ表を参照していることを確認済み。
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead>
+            <tr><th>杭の全長</th><th>台船</th><th>引船</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="num">28m未満</td><td>鋼300t積</td><td>鋼D450PS型</td></tr>
+            <tr><td class="num">28〜31m未満</td><td>鋼400t積</td><td>鋼D450PS型</td></tr>
+            <tr><td class="num">31〜34m未満</td><td>鋼500t積</td><td>鋼D500PS型</td></tr>
+            <tr><td class="num">34〜39m未満</td><td>鋼700t積</td><td>鋼D550PS型</td></tr>
+            <tr><td class="num">39〜44m未満</td><td>鋼1,000t積</td><td>鋼D600PS型</td></tr>
+            <tr><td class="num">44m以上</td><td class="dash" colspan="2">基準に規定なし(別途選定)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="note">
+        揚錨船は規格固定(鋼D 5t吊)。潜水士船(D270PS型 3〜5t吊)は「障害の有無」(E2 補正の判断軸)とは
+        <strong>別の質問</strong>として、打設個所の障害物・打設後の異常調査作業が伴う場合のみ計上する。
+      </p>
+
       <h3>算出値には信頼度を付す</h3>
       <p>
         出典のある式で求まるものを <span class="pill ok">確定</span>、
@@ -816,6 +860,29 @@
         <code>CalcQuayWallQuantity</code> は前壁・タイロッド・控え杭の諸元と本数から、
         施設 1 件分の鋼材質量を集計する。図面はまだ無く諸元だけが決まっている検討段階で、
         AutoCAD を開かずに概算したいときに使う。
+      </p>
+
+      <pre class="code"> [String] csvPath ── <b>SpqwNodes.CalcWeightedN</b> ──┬── 加重平均N値 (R用、N=0連続除外)
+                                              ├── 根入れ長 (R用) [m]
+                                              ├── 加重平均N値 (Sb用、N≦5連続除外)
+                                              ├── 根入れ長 (Sb用) [m]
+                                              ├── 加重平均N値 (砂質土等)
+                                              ├── 加重平均N値 (粘性土)
+                                              ├── 加重平均N値 (玉石混りレキ)
+                                              ├── 加重平均N値 (固結土)
+                                              ├── 加重平均一軸圧縮強度 (岩盤) [N/mm2]
+                                              └── 岩盤層の除外本数</pre>
+
+      <p class="note">
+        柱状図 CSV(標高上端・標高下端・層厚・N値・土質区分・岩盤の一軸圧縮強度)から、
+        <code>SPQW_FRONTWALL_Estimate</code> 等の打設歩掛積算コマンドが個別に尋ねる
+        「加重平均N値」を算出する。<strong>R 用と Sb 用で除外ルールが異なり</strong>
+        (R は表層から連続する N=0 のみ除外、Sb は N≦5 まで除外)、同じ柱状図でも
+        2 つの値が異なり得る。ジオメトリ・AutoCAD トランザクションを伴わない純計算のため
+        AutoCAD コマンドではなく Dynamo ノードとし、<code>File Path</code> ノードから
+        ファイルパスを直接配線できる。行に 1 件でも不備があれば例外を投げて計算全体を止める。
+        算出した値は、対応する AutoCAD コマンドの「加重平均N値」欄にそのまま入力して使う
+        (両者を自動連携する機能は無い)。
       </p>
 
       <h3>推奨ノード例</h3>
@@ -912,6 +979,46 @@
         継手接続数 9 は「総本数 10 − 1」に一致する。既定値どうしがどう連動しているかを
         確かめてから、実際の諸元に置き換えるとよい。
       </p>
+
+      <h4>4. 柱状図から加重平均N値を算出する</h4>
+      <p>
+        <code>File Path</code> ノードで柱状図 CSV を指定するだけで、R 用・Sb 用・土質区分別の
+        加重平均N値がまとめて得られる。以下は 5 層(表土・粘土・砂質土・打止め層・岩盤)の
+        代表例(実際に Core 層をビルド・実行して算出した値)。
+      </p>
+
+      <pre class="code">土層名,土質区分,標高上端,標高下端,層厚,N値,打撃回数法,貫入量,一軸圧縮強度
+埋土,砂質土等,0.0,-2.0,2.0,3,,,
+沖積粘土層,粘性土,-2.0,-5.0,3.0,8,,,
+洪積砂質土層,砂質土等,-5.0,-10.0,5.0,22,,,
+洪積砂礫層,砂質土等,-10.0,-15.0,5.0,55,50,3.3,
+軟岩層,岩盤,-15.0,-20.0,5.0,,,,4.2</pre>
+
+      <div class="tw">
+        <table>
+          <thead>
+            <tr><th>出力</th><th>値</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>加重平均N値(R用)</td><td class="num">160.848</td></tr>
+            <tr><td>根入れ長(R用)</td><td class="num">15.0 m</td></tr>
+            <tr><td>加重平均N値(Sb用)</td><td class="num">185.133</td></tr>
+            <tr><td>根入れ長(Sb用)</td><td class="num">13.0 m</td></tr>
+            <tr><td>加重平均N値(砂質土等)</td><td class="num">199.061</td></tr>
+            <tr><td>加重平均N値(粘性土)</td><td class="num">8.000</td></tr>
+            <tr><td>加重平均一軸圧縮強度(岩盤)</td><td class="num">4.2 N/mm²</td></tr>
+            <tr><td>岩盤層の除外本数</td><td class="num">1</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="note">
+        R 用(160.848)と Sb 用(185.133)が異なるのは、表層の埋土(N=3)が Sb の除外しきい値
+        (N≦5)には該当して除外されるが、R の除外しきい値(N=0)には該当しないため。
+        最深部の打止め層(N=55、50回法・貫入量3.3cm)は換算N値 1500÷3.3≒454.5 に置き換えて
+        集計している。岩盤層(軟岩層)は N 値を持たないため R/Sb 双方から除外され、
+        代わりに一軸圧縮強度 4.2 N/mm² が別枠で加重平均される。
+      </p>
     </div>
   </section>
 
@@ -922,7 +1029,7 @@
       <h2>Core と Plugin を分ける</h2>
       <p>
         計算層(Core)は AutoCAD に依存せず BCL のみを参照するため、WSL / Linux 上で
-        <strong>524 件のテストがそのまま走る</strong>。AutoCAD に依存するのは図形生成・XData・
+        <strong>585 件のテストがそのまま走る</strong>。AutoCAD に依存するのは図形生成・XData・
         コマンド定義だけで、こちらはスタブとリンクして構文・型検証まで行う。
       </p>
 
@@ -930,14 +1037,15 @@
 ├── src/SheetPileQuayWall.Core/     <i>AutoCAD 非依存(BCL のみ)</i>
 │   ├── FrontWall/                  <i>断面性能・継手・打設歩掛 3 工法</i>
 │   ├── TieRod/                     <i>タイロッド計算・配置</i>
-│   ├── AnchorPile/                 <i>控え杭の整列計算</i>
+│   ├── AnchorPile/                 <i>控え杭の整列計算・打撃工法(4節3-4.6)</i>
 │   ├── Import/                     <i>帳票 CSV 取り込み</i>
+│   ├── Geotech/                    <i>柱状図から加重平均N値・一軸圧縮強度</i>
 │   ├── CrossMemberValidator.cs     <i>部材間の整合チェック</i>
 │   └── QuayWallEstimate.cs         <i>施設 1 件分の数量集計</i>
 └── src/SheetPileQuayWall.Plugin/   <i>AutoCAD 依存</i>
-    ├── Commands/                   <i>SPQW_* 18 コマンド</i>
+    ├── Commands/                   <i>SPQW_* 19 コマンド</i>
     ├── XData/                      <i>キー=値 + 1011 併記</i>
-    └── Dynamo/SpqwNodes.cs         <i>Zero Touch Node 2 個</i></pre>
+    └── Dynamo/SpqwNodes.cs         <i>Zero Touch Node 3 個</i></pre>
 
       <h3>守っている規約</h3>
       <ul class="plain">
@@ -1008,6 +1116,42 @@
         </p>
       </div>
 
+      <div class="alert amber">
+        <div class="hd">既存 <code>FrontWall.DriveEstimate.GetLabor</code> の労務工数にバグを確認</div>
+        <p>
+          控え杭(4節 3-4.6)の労務工数を実装する過程で基準表を読み直した結果、前壁の打撃工法(3-4.5)と
+          共通のはずの労務表(交通誘導員・世話役・特殊作業員等)に既存コードとの不一致が見つかった。
+          基準は陸上打設で世話役=2 名(&lt;20m)/3 名(≥20m)、特殊作業員=1 名/2 名だが、
+          既存の <code>FrontWall.DriveEstimate.GetLabor</code> は陸上を杭長によらず一律 2 名としており、
+          海上側も境界を 20m/25m の 3 段で判定する誤りを含む(正しくは 25m 一段のみ)。
+          新設した <code>AnchorPile.AnchorDriveEstimate.GetLabor</code> は正しい表で実装済み(テスト
+          <code>T1208</code> が同一入力で両者が食い違うことを明示的に確認している)。
+          <strong>既存の前壁側は「触れなければならない箇所だけ触れる」の方針により意図的に未修正のまま。</strong>
+          前壁の打撃工法積算を利用する際は労務工数の欄を手動で見直すこと。
+        </p>
+      </div>
+
+      <div class="alert">
+        <div class="hd">控え杭の打設歩掛は陸上施工のみ対応</div>
+        <p>
+          <code>SPQW_ANCHORPILE_Estimate</code> は 4節 3-4.6 のうち陸上施工の労務・仮設をもとに実装した。
+          海上施工(台船・引船が絡む区間)の歩掛はまだ組み込んでいない。
+        </p>
+      </div>
+
+      <div class="alert amber">
+        <div class="hd">加重平均N値の算定は R・Sb・γ で除外ルールが異なり、岩盤の扱いは 009 独自判断</div>
+        <p>
+          基準原文は R(極限支持力)用の N 平均を「表層から連続する N=0 の区間を除く」、
+          Sb(必要根入れ)用は「表層から連続する N≦5 の区間を除く」と明記するが、
+          γ(土質区分ごとの単位体積重量)に対応する N 平均の除外ルールは原文に記載がない。
+          <code>Geotech.BoringLogAnalysis.CalcWeightedNBySoilType</code> は除外なしの単純加重平均として実装している。
+          また、岩盤層(N 値でなく qu で評価する層)は R・Sb 双方の加重平均から常に除外しているが、
+          これは原文が岩盤混じり地層を明示的に想定していないための 009 独自の判断であり、
+          実務では地質状況に応じて手動確認すること。
+        </p>
+      </div>
+
       <h3>そのほかの限定事項</h3>
       <ul class="plain">
         <li>前壁の一括生成は<strong>直線配置のみ</strong>。平面線形が曲がる・折れる岸壁には対応しない</li>
@@ -1026,7 +1170,7 @@
     <div class="body">
       <h2>Core は AutoCAD なしで検証できる</h2>
 
-      <pre class="code"><i># Core + テスト(AutoCAD 不要。524 件が green であること)</i>
+      <pre class="code"><i># Core + テスト(AutoCAD 不要。585 件が green であること)</i>
 dotnet test tests/SheetPileQuayWall.Core.Tests -c Release
 
 <i># Plugin の構文検証(AutoCAD 不要。スタブとリンクする。配布不可)</i>
@@ -1048,8 +1192,8 @@ dotnet build src/SheetPileQuayWall.Plugin/SheetPileQuayWall.Plugin.csproj -c Rel
 
   <footer class="colophon">
     <span>009_sheet-pile-quaywall</span>
-    <span>18 commands</span>
-    <span>524 tests green</span>
+    <span>19 commands</span>
+    <span>585 tests green</span>
     <span>AutoCAD 2025 / Civil 3D 2025</span>
     <span>.NET 8.0 · net8.0-windows · x64</span>
   </footer>
