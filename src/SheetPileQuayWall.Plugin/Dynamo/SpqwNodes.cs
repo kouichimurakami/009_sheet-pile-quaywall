@@ -149,5 +149,97 @@ namespace SheetPileQuayWall.Plugin.Dynamo
                 { "合計質量 [kg]",         q.TotalKg              }
             };
         }
+
+        // ノード: SpqwNodes.CalcWeightedN
+        // 柱状図 CSV から加重平均N値(R用・Sb用・土質区分別)と岩盤の加重平均一軸圧縮強度
+        // を算出する。ジオメトリ・AutoCAD トランザクションを伴わない純計算のため、
+        // 他の2ノードと同じくファイルパスを直接受け取れる(Dynamo の File Path ノード等
+        // から配線する)。行の不備が1件でもあれば例外を投げて計算全体を止める
+        // (AutoCAD コマンド側の CSV 取り込みと異なり、部分的な値のまま地盤条件の
+        // 計算を進めると設計判断を誤るため、あえて全件成功を必須にしている)。
+        [Autodesk.DesignScript.Runtime.MultiReturn(new[]
+        {
+            "加重平均N値 (R用、N=0連続除外)",
+            "根入れ長 (R用) [m]",
+            "加重平均N値 (Sb用、N≦5連続除外)",
+            "根入れ長 (Sb用) [m]",
+            "加重平均N値 (砂質土等)",
+            "加重平均N値 (粘性土)",
+            "加重平均N値 (玉石混りレキ)",
+            "加重平均N値 (固結土)",
+            "加重平均一軸圧縮強度 (岩盤) [N/mm2]",
+            "岩盤層の除外本数 (R/Sb計算から除外)"
+        })]
+        public static System.Collections.Generic.Dictionary<string, object> CalcWeightedN(
+            string csvPath = "")
+        {
+            if (string.IsNullOrEmpty(csvPath))
+            {
+                throw new System.ArgumentException(
+                    "柱状図 CSV のファイルパスを指定してください。", nameof(csvPath));
+            }
+            if (!System.IO.File.Exists(csvPath))
+            {
+                throw new System.ArgumentException(
+                    $"ファイルが見つかりません: {csvPath}", nameof(csvPath));
+            }
+
+            string csvText;
+            try
+            {
+                // 対応エンコードは UTF-8 のみ(帳票 CSV 取り込みと同じ制約)。
+                csvText = System.IO.File.ReadAllText(csvPath, System.Text.Encoding.UTF8);
+            }
+            catch (System.IO.IOException ex)
+            {
+                throw new System.ArgumentException($"ファイルを読み取れません: {ex.Message}", nameof(csvPath));
+            }
+
+            SheetPileQuayWall.Core.Import.ImportResult<SheetPileQuayWall.Core.Geotech.BoringLayer> result =
+                SheetPileQuayWall.Core.Geotech.BoringLogAnalysis.Parse(csvText);
+
+            if (result.Errors.Count > 0)
+            {
+                System.Text.StringBuilder message = new System.Text.StringBuilder(
+                    "柱状図 CSV に不備があります: ");
+                for (int i = 0; i < result.Errors.Count; i++)
+                {
+                    if (i > 0) { message.Append("; "); }
+                    message.Append(result.Errors[i].RowNumber);
+                    message.Append("行目: ");
+                    message.Append(result.Errors[i].Message);
+                }
+                throw new System.ArgumentException(message.ToString());
+            }
+
+            var forR = SheetPileQuayWall.Core.Geotech.BoringLogAnalysis.CalcWeightedN(
+                result.Rows, SheetPileQuayWall.Core.Geotech.BoringLogAnalysis.RExclusionThreshold);
+            var forSb = SheetPileQuayWall.Core.Geotech.BoringLogAnalysis.CalcWeightedN(
+                result.Rows, SheetPileQuayWall.Core.Geotech.BoringLogAnalysis.SbExclusionThreshold);
+
+            double? sand = SheetPileQuayWall.Core.Geotech.BoringLogAnalysis.CalcWeightedNBySoilType(
+                result.Rows, SheetPileQuayWall.Core.FrontWall.JetLayerType.SandGravel);
+            double? clay = SheetPileQuayWall.Core.Geotech.BoringLogAnalysis.CalcWeightedNBySoilType(
+                result.Rows, SheetPileQuayWall.Core.FrontWall.JetLayerType.Clay);
+            double? cobble = SheetPileQuayWall.Core.Geotech.BoringLogAnalysis.CalcWeightedNBySoilType(
+                result.Rows, SheetPileQuayWall.Core.FrontWall.JetLayerType.CobbleGravel);
+            double? cemented = SheetPileQuayWall.Core.Geotech.BoringLogAnalysis.CalcWeightedNBySoilType(
+                result.Rows, SheetPileQuayWall.Core.FrontWall.JetLayerType.Cemented);
+            double? qu = SheetPileQuayWall.Core.Geotech.BoringLogAnalysis.CalcWeightedQu(result.Rows);
+
+            return new System.Collections.Generic.Dictionary<string, object>
+            {
+                { "加重平均N値 (R用、N=0連続除外)",     forR.weightedN },
+                { "根入れ長 (R用) [m]",                 forR.reckoningLength_m },
+                { "加重平均N値 (Sb用、N≦5連続除外)",    forSb.weightedN },
+                { "根入れ長 (Sb用) [m]",                forSb.reckoningLength_m },
+                { "加重平均N値 (砂質土等)",              (object?)sand ?? "" },
+                { "加重平均N値 (粘性土)",                (object?)clay ?? "" },
+                { "加重平均N値 (玉石混りレキ)",          (object?)cobble ?? "" },
+                { "加重平均N値 (固結土)",                (object?)cemented ?? "" },
+                { "加重平均一軸圧縮強度 (岩盤) [N/mm2]", (object?)qu ?? "" },
+                { "岩盤層の除外本数 (R/Sb計算から除外)", forR.excludedRockLayerCount }
+            };
+        }
     }
 }

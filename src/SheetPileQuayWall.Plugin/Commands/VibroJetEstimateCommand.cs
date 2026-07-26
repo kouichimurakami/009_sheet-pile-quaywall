@@ -327,6 +327,22 @@ namespace SheetPileQuayWall.Plugin.Commands
                 ? SheetPileQuayWall.Core.FrontWall.ObstacleStatus.Exists
                 : SheetPileQuayWall.Core.FrontWall.ObstacleStatus.None;
 
+            // 付帯船舶(台船・引船・揚錨船・潜水士船)は海上打設のみ計上する(3-16-18)。
+            // 潜水士船は E2(障害区分)とは別の判断軸で、打設個所の障害物・打設後の
+            // 異常有無等の調査作業が伴うかどうかで決める(3-16-18 注4)。
+            bool needDiverVessel = false;
+            if (site == SheetPileQuayWall.Core.FrontWall.ConstructionSite.Offshore)
+            {
+                string diverText;
+                if (!SheetPileQuayWall.Plugin.Prompt.TryAskKeyword(
+                    ed, "\n潜水士船 (打設個所の障害物・打設後異常の調査作業) [計上しない(N)/計上する(Y)] <N>: ",
+                    new string[] { "N", "Y" }, "N", out diverText))
+                {
+                    return;
+                }
+                needDiverVessel = diverText == "Y";
+            }
+
             double vibroMass_t;
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
                 ed, "\nバイブロハンマ質量 Wv (t、鋼管チャック質量を含む。クレーン規格算定用) <10.0>: ",
@@ -388,6 +404,34 @@ namespace SheetPileQuayWall.Plugin.Commands
             ed.WriteMessage($"\n  バイブロハンマ  : {vibroClass}");
             ed.WriteMessage($"\n  発動発電機      : {vibroGenerator} (バイブロハンマ用)");
             ed.WriteMessage($"\n  クレーン吊上げ  : {craneCapacity_t,10:F1} t 以上  ((Wv + Wp) × 6、3-16-18)");
+            ed.WriteMessage(
+                "\n  (クレーン付台船・起重機船の規格は上記吊上げ荷重から別途選定すること)");
+
+            if (site == SheetPileQuayWall.Core.FrontWall.ConstructionSite.Offshore)
+            {
+                ed.WriteMessage("\n--- 付帯船舶 (3-16-18、積載物の長さ = 杭全長で選定) ---");
+                var (barge, tug) = SheetPileQuayWall.Core.FrontWall.VibroEstimate.GetBargeAndTug(
+                    record.LengthM);
+                if (barge.Length == 0)
+                {
+                    ed.WriteMessage(
+                        $"\n  台船・引船      : 全長 {record.LengthM:F1}m は規格表の範囲" +
+                        $"(44m未満)を超えています。別途選定してください。");
+                }
+                else
+                {
+                    ed.WriteMessage($"\n  台船            : {barge} × 1");
+                    ed.WriteMessage($"\n  引船            : {tug} × 1");
+                }
+                ed.WriteMessage(
+                    $"\n  揚錨船          : {SheetPileQuayWall.Core.FrontWall.VibroEstimate.AnchorHandlingVesselSpec} × 1");
+                if (needDiverVessel)
+                {
+                    ed.WriteMessage(
+                        $"\n  潜水士船        : {SheetPileQuayWall.Core.FrontWall.VibroEstimate.DiverVesselSpec} × 1" +
+                        " (必要に応じて計上)");
+                }
+            }
 
             ed.WriteMessage("\n--- ウォータージェット設備 (3-16-16〜17) ---");
             ed.WriteMessage("\n  ジェット規格    : 243kW / 吐出圧力 14.7MPa / 吐出流量 895 ℓ/min");

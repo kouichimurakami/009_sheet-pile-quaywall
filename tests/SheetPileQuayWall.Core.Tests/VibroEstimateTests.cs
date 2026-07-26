@@ -421,5 +421,72 @@ namespace SheetPileQuayWall.Core.Tests
             Xunit.Assert.Equal("200kW",
                 SheetPileQuayWall.Core.FrontWall.VibroEstimate.GetVibroClass(8.0, rSheet));
         }
+
+        // ── 台船・引船・揚錨船・潜水士船(付帯船舶、3-4.6-6 / 3-16-29)──────────
+
+        // T1215: 積載物の長さ(杭の全長)による台船・引船の選定(境界未満の代表値)
+        [Xunit.Theory]
+        [Xunit.InlineData(20.0, "鋼300t積", "鋼D450PS型")]
+        [Xunit.InlineData(30.0, "鋼400t積", "鋼D450PS型")]
+        [Xunit.InlineData(33.0, "鋼500t積", "鋼D500PS型")]
+        [Xunit.InlineData(38.0, "鋼700t積", "鋼D550PS型")]
+        [Xunit.InlineData(43.0, "鋼1,000t積", "鋼D600PS型")]
+        public void T1215_GetBargeAndTug_MatchesTableByPileLength(
+            double length_m, string barge, string tug)
+        {
+            var (b, t) = SheetPileQuayWall.Core.FrontWall.VibroEstimate.GetBargeAndTug(length_m);
+            Xunit.Assert.Equal(barge, b);
+            Xunit.Assert.Equal(tug, t);
+        }
+
+        // T1216: 各区分の境界は「未満」— ちょうどの値は次のランクに入る
+        //   (28.0m は「28m未満」に含まれず「28〜31m」= 400t 側になる)
+        [Xunit.Theory]
+        [Xunit.InlineData(27.999, "鋼300t積")]
+        [Xunit.InlineData(28.0, "鋼400t積")]
+        [Xunit.InlineData(31.0, "鋼500t積")]
+        [Xunit.InlineData(34.0, "鋼700t積")]
+        [Xunit.InlineData(39.0, "鋼1,000t積")]
+        public void T1216_GetBargeAndTug_BoundaryIsExclusiveUpperBound(
+            double length_m, string expectedBarge)
+        {
+            var (b, _) = SheetPileQuayWall.Core.FrontWall.VibroEstimate.GetBargeAndTug(length_m);
+            Xunit.Assert.Equal(expectedBarge, b);
+        }
+
+        // T1217: 44m 以上は基準に規定が無く、空(別途選定)を返す
+        [Xunit.Theory]
+        [Xunit.InlineData(44.0)]
+        [Xunit.InlineData(60.0)]
+        public void T1217_GetBargeAndTug_At44mOrMore_ReturnsEmpty(double length_m)
+        {
+            var (b, t) = SheetPileQuayWall.Core.FrontWall.VibroEstimate.GetBargeAndTug(length_m);
+            Xunit.Assert.Equal("", b);
+            Xunit.Assert.Equal("", t);
+        }
+
+        // T1218: 揚錨船・潜水士船の規格はバイブロ規格・杭長によらず一定
+        [Xunit.Fact]
+        public void T1218_AnchorHandlingAndDiverVesselSpecs_AreConstants()
+        {
+            Xunit.Assert.Equal("鋼D 5t吊",
+                SheetPileQuayWall.Core.FrontWall.VibroEstimate.AnchorHandlingVesselSpec);
+            Xunit.Assert.Equal("D270PS型 3〜5t吊",
+                SheetPileQuayWall.Core.FrontWall.VibroEstimate.DiverVesselSpec);
+        }
+
+        // T1219: 台船・引船の規格上限は 44m(BargeTugMaxLength_m と GetBargeAndTug の
+        //        別途選定境界が食い違わないことを固定する)
+        [Xunit.Fact]
+        public void T1219_BargeTugMaxLength_MatchesGetBargeAndTugBoundary()
+        {
+            double justUnder = SheetPileQuayWall.Core.FrontWall.VibroEstimate.BargeTugMaxLength_m - 0.001;
+            var (b, _) = SheetPileQuayWall.Core.FrontWall.VibroEstimate.GetBargeAndTug(justUnder);
+            Xunit.Assert.NotEqual("", b);
+
+            var (bAtMax, _) = SheetPileQuayWall.Core.FrontWall.VibroEstimate.GetBargeAndTug(
+                SheetPileQuayWall.Core.FrontWall.VibroEstimate.BargeTugMaxLength_m);
+            Xunit.Assert.Equal("", bAtMax);
+        }
     }
 }

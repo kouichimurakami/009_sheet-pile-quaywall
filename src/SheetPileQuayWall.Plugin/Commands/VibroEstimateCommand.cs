@@ -106,6 +106,17 @@ namespace SheetPileQuayWall.Plugin.Commands
                 ? SheetPileQuayWall.Core.FrontWall.ObstacleStatus.Exists
                 : SheetPileQuayWall.Core.FrontWall.ObstacleStatus.None;
 
+            // 潜水士船は E2(障害区分)とは別の判断軸(3-16-29 注2)。打設予定個所の
+            // 障害物・打設後の異常の有無等の調査作業が伴うかどうかで計上する。
+            string diverText;
+            if (!SheetPileQuayWall.Plugin.Prompt.TryAskKeyword(
+                ed, "\n潜水士船 (打設個所の障害物・打設後異常の調査作業) [計上しない(N)/計上する(Y)] <N>: ",
+                new string[] { "N", "Y" }, "N", out diverText))
+            {
+                return;
+            }
+            bool needDiverVessel = diverText == "Y";
+
             // ── 鋼材質量(本管 + 継手)───────────────────────────────────
             // バイブロ規格は鋼材質量で選定するため、実際に吊り込む継手金物を含める。
             // (打撃工法の SPQW_FRONTWALL_Estimate は本管のみで選定しており差が出る)
@@ -195,11 +206,34 @@ namespace SheetPileQuayWall.Plugin.Commands
             else
             {
                 ed.WriteMessage($"\n  発動発電機      : {generator}");
-                ed.WriteMessage($"\n  起重機船・杭打船: {craneVessel} (台船 1・引船 1・揚錨船 5t吊 1 を伴う)");
+                ed.WriteMessage($"\n  起重機船・杭打船: {craneVessel}");
             }
             if (splicing)
             {
                 ed.WriteMessage($"\n  継手溶接機械    : 半自動 500A × {weldMachines} 台 + 発動発電機 {weldGenerator}");
+            }
+
+            ed.WriteMessage("\n--- 付帯船舶 (3-16-29、積載物の長さ = 杭全長で選定) ---");
+            var (barge, tug) = SheetPileQuayWall.Core.FrontWall.VibroEstimate.GetBargeAndTug(
+                record.LengthM);
+            if (barge.Length == 0)
+            {
+                ed.WriteMessage(
+                    $"\n  台船・引船      : 全長 {record.LengthM:F1}m は規格表の範囲" +
+                    $"(44m未満)を超えています。別途選定してください。");
+            }
+            else
+            {
+                ed.WriteMessage($"\n  台船            : {barge} × 1");
+                ed.WriteMessage($"\n  引船            : {tug} × 1");
+            }
+            ed.WriteMessage(
+                $"\n  揚錨船          : {SheetPileQuayWall.Core.FrontWall.VibroEstimate.AnchorHandlingVesselSpec} × 1");
+            if (needDiverVessel)
+            {
+                ed.WriteMessage(
+                    $"\n  潜水士船        : {SheetPileQuayWall.Core.FrontWall.VibroEstimate.DiverVesselSpec} × 1" +
+                    " (必要に応じて計上)");
             }
 
             ed.WriteMessage("\n--- 施工能力 (3-16-30) ---");

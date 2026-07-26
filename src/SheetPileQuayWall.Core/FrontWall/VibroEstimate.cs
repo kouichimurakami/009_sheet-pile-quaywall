@@ -53,6 +53,29 @@ namespace SheetPileQuayWall.Core.FrontWall
             ( "240kW", "800kVA", "200t吊" ),
         };
 
+        // ── 台船・引船の規格(積載物の長さ = 杭の全長により決定、4節 3-4.6-6)──
+        // 3-16-29 の注1「台船および引船の規格は、鋼管杭・鋼管矢板運搬の規格とする」
+        // により本表を参照する。16節 3-1(ジェット併用)も同じ注記で本表を参照するため
+        // (3-16-18 注2)、FrontWall.VibroJetEstimate 側もこのメソッドを直接呼び出す。
+        private static readonly (double upperBound_m, string barge, string tug)[] BargeTugTable =
+        {
+            ( 28.0, "鋼300t積",   "鋼D450PS型" ),
+            ( 31.0, "鋼400t積",   "鋼D450PS型" ),
+            ( 34.0, "鋼500t積",   "鋼D500PS型" ),
+            ( 39.0, "鋼700t積",   "鋼D550PS型" ),
+            ( 44.0, "鋼1,000t積", "鋼D600PS型" ),
+        };
+
+        /// <summary>台船・引船の規格表がカバーする積載物長の上限 [m]。これ以上は
+        /// 基準上「別途長さに見合った台船を選定する」(3-4.6-6)。</summary>
+        public const double BargeTugMaxLength_m = 44.0;
+
+        /// <summary>揚錨船の規格(バイブロ規格によらず一定、3-16-29)。</summary>
+        public const string AnchorHandlingVesselSpec = "鋼D 5t吊";
+
+        /// <summary>潜水士船の規格(必要な場合のみ計上。バイブロ規格によらず一定、3-16-29)。</summary>
+        public const string DiverVesselSpec = "D270PS型 3〜5t吊";
+
         // ── 定数(3-16-30)────────────────────────────────────────────────
 
         /// <summary>1 m 当り準備時間 To [分/m]。</summary>
@@ -160,6 +183,22 @@ namespace SheetPileQuayWall.Core.FrontWall
                 if (vibro == vibroClass)
                 {
                     return (generator, craneVessel);
+                }
+            }
+            return ("", "");
+        }
+
+        /// <summary>
+        /// 台船・引船の規格(積載物の長さ = 杭の全長から選定、4節 3-4.6-6)。
+        /// 44m 以上は基準に規定が無いため空文字を返す(別途選定が必要)。
+        /// </summary>
+        public static (string barge, string tug) GetBargeAndTug(double pileLength_m)
+        {
+            foreach (var (upperBound, barge, tug) in BargeTugTable)
+            {
+                if (pileLength_m < upperBound)
+                {
+                    return (barge, tug);
                 }
             }
             return ("", "");
