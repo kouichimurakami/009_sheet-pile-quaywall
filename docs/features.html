@@ -829,7 +829,22 @@
         ジオメトリを扱わない純計算のため <code>ProtoGeometry.dll</code> は参照しない。
       </p>
 
-      <h3>ノード一覧</h3>
+      <h3>共通仕様</h3>
+      <ul class="plain">
+        <li>ノード検索で <code>SpqwNodes.</code> と入力すると 3 ノードが表示される。各引数がそのまま入力ポートになる</li>
+        <li>未配線の入力ポートは<strong>デフォルト値で実行される</strong>。既定値のまま出力を確かめてから実データに置き換えられる(例外: <code>CalcWeightedN</code> はファイルパス必須)</li>
+        <li>出力は <code>[MultiReturn]</code> の辞書で、日本語の辞書キーがそのまま出力ポート名になる。必要な項目だけ下流へ配線すればよい</li>
+        <li>入力にリストを渡すと 1 要素ずつ自動で呼び出される(list-level 自動反復。下の例 1)</li>
+        <li>入力は実務の呼び径慣行に合わせ mm 呼称(<code>D_mm</code> 等)で受け、ノード内部で直ちに m へ変換する。内部計算はすべて m</li>
+        <li>入力不正はすべて <code>ArgumentException</code> を投げてノードを警告状態にする。不正値のまま計算は続けない</li>
+        <li>打設歩掛(3 工法)のノードとジオメトリ生成ノードは未実装(後者は AutoCAD のトランザクションを伴い実機でしか検証できないため)</li>
+      </ul>
+
+      <h3><code>CalcSection</code> — 前壁鋼管矢板の断面性能</h3>
+      <p>
+        前壁鋼管矢板 1 本分の断面性能(K011)・有効幅・継手質量を返す。候補径の比較検討や、
+        <code>SPQW_FRONTWALL_Create</code> へ入力する前の諸元確認に使う。
+      </p>
 
       <pre class="code"> [Number] D_mm ──────┐
  [Number] t_mm ──────┤
@@ -842,6 +857,29 @@
                                                  ├── 内径 d [mm]
                                                  ├── 有効幅 B [mm]
                                                  └── 継手質量 (1接続) [kg/m]</pre>
+
+      <div class="tw">
+        <table>
+          <thead>
+            <tr><th>入力</th><th>日本語名</th><th>単位</th><th>デフォルト値</th><th>範囲</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>D_mm</code></td><td>外径 D</td><td>mm</td><td class="num">800.0</td><td>500〜2000(K011 製造範囲)</td></tr>
+            <tr><td><code>t_mm</code></td><td>肉厚 t</td><td>mm</td><td class="num">12.0</td><td>9〜25、かつ内径 &gt; 1 mm</td></tr>
+            <tr><td><code>L_m</code></td><td>全長 L</td><td>m</td><td class="num">20.0</td><td>1〜80</td></tr>
+            <tr><td><code>jointType</code></td><td>継手形式</td><td>−</td><td>"LT75"</td><td>LT65 / LT75 / LT100 / PP / PT</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="note">
+        D・t・L は <code>InputValidator</code> で検証し、範囲外は例外で止まる。出力のうち
+        有効幅 B は LT100 のみカタログ式が無く D + 100 mm の<strong>推定</strong>、
+        継手質量は 007 のバグ(P-P 形の片側落ち)を修正した側別質量(<code>JointMass</code>)による。
+        それ以外の出力はすべて K011 出典の<strong>確定</strong>値。
+      </p>
+
+      <h3><code>CalcQuayWallQuantity</code> — 施設 1 件分の鋼材質量集計</h3>
 
       <pre class="code"> [Number]  frontD_mm ────────────┐
  [Number]  frontT_mm ────────────┤
@@ -861,6 +899,36 @@
         施設 1 件分の鋼材質量を集計する。図面はまだ無く諸元だけが決まっている検討段階で、
         AutoCAD を開かずに概算したいときに使う。
       </p>
+
+      <div class="tw">
+        <table>
+          <thead>
+            <tr><th>入力</th><th>日本語名</th><th>単位</th><th>デフォルト値</th><th>範囲</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>frontD_mm</code></td><td>前壁 外径</td><td>mm</td><td class="num">800.0</td><td>チェックなし(K011 500〜2000 を目安)</td></tr>
+            <tr><td><code>frontT_mm</code></td><td>前壁 肉厚</td><td>mm</td><td class="num">12.0</td><td>チェックなし(同 9〜25 を目安)</td></tr>
+            <tr><td><code>frontL_m</code></td><td>前壁 全長</td><td>m</td><td class="num">20.0</td><td>チェックなし(同 1〜80 を目安)</td></tr>
+            <tr><td><code>jointType</code></td><td>前壁 継手形式</td><td>−</td><td>"LT75"</td><td>LT65 / LT75 / LT100 / PP / PT(不明コードは例外)</td></tr>
+            <tr><td><code>frontPieceCount</code></td><td>前壁 総本数</td><td>本</td><td class="num">10</td><td>チェックなし</td></tr>
+            <tr><td><code>tieRodSetCount</code></td><td>タイロッド組数</td><td>組</td><td class="num">5</td><td>チェックなし(0 で計上なし)</td></tr>
+            <tr><td><code>tieRodMassPerSet_kg</code></td><td>タイロッド 1 組当り質量</td><td>kg</td><td class="num">150.0</td><td>チェックなし(008 の RodMass 相当。付属品を含まない)</td></tr>
+            <tr><td><code>anchorPileCount</code></td><td>控え杭 本数</td><td>本</td><td class="num">5</td><td>チェックなし(0 で計上なし)</td></tr>
+            <tr><td><code>anchorD_mm</code></td><td>控え杭 外径</td><td>mm</td><td class="num">800.0</td><td>チェックなし(JIS スナップも行わない)</td></tr>
+            <tr><td><code>anchorT_mm</code></td><td>控え杭 肉厚</td><td>mm</td><td class="num">12.0</td><td>チェックなし</td></tr>
+            <tr><td><code>anchorL_m</code></td><td>控え杭 全長</td><td>m</td><td class="num">18.0</td><td>チェックなし</td></tr>
+            <tr><td><code>anchorClosedTip</code></td><td>控え杭 先端形状</td><td>−</td><td>false(開端)</td><td>true = 閉端(底板質量を加算)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="note">
+        入力の範囲チェックは継手コードのみ。<strong>その他の数値入力は検証されない</strong> —
+        検討段階の道具という位置づけのため、製造範囲外の値もそのまま計算される。
+        確定諸元は AutoCAD コマンド側の範囲(K011 / JIS A 5525)に収めること。
+      </p>
+
+      <h3><code>CalcWeightedN</code> — 柱状図 CSV から加重平均N値</h3>
 
       <pre class="code"> [String] csvPath ── <b>SpqwNodes.CalcWeightedN</b> ──┬── 加重平均N値 (R用、N=0連続除外)
                                               ├── 根入れ長 (R用) [m]
@@ -883,6 +951,24 @@
         ファイルパスを直接配線できる。行に 1 件でも不備があれば例外を投げて計算全体を止める。
         算出した値は、対応する AutoCAD コマンドの「加重平均N値」欄にそのまま入力して使う
         (両者を自動連携する機能は無い)。
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead>
+            <tr><th>入力</th><th>日本語名</th><th>単位</th><th>デフォルト値</th><th>範囲</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>csvPath</code></td><td>柱状図 CSV のファイルパス</td><td>−</td><td>""(空文字)</td><td>存在する UTF-8 の CSV(9 列形式)。空文字・ファイル不存在・読取不可はいずれも例外</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="note">
+        他の 2 ノードと違い<strong>既定値のままでは実行できない</strong>(空文字で即例外)。
+        Dynamo 標準の <code>File Path</code> ノード(ファイル選択ダイアログ付き)を繋ぐのが簡単。
+        該当層が無く算出できない出力(例: 岩盤層が無い場合の qu、粘性土が無い場合の粘性土 N̄)は
+        空文字を返す。N&gt;50 の打止め行は打撃回数法・貫入量の列から換算N値へ自動変換して集計する。
       </p>
 
       <h3>推奨ノード例</h3>
@@ -1160,6 +1246,7 @@
         <li>鋼材質量の算定基礎が工法間で揃っていない。打撃は本管のみ、振動 2 種は本管 + 継手金物を使う(基準はどちらも「鋼材質量」としか書いていない)</li>
         <li>端数処理が既存モジュールと異なる。振動 2 種は基準どおりの四捨五入、既存の打撃は .NET 既定の銀行丸めのまま</li>
         <li>『港湾工事工種体系ツリー』への工種マッピングは未実装</li>
+        <li><code>CalcWeightedN</code> と積算コマンドの自動連携は無い。算出値は各コマンドの加重平均N値欄へ手入力で転記する。また積算コマンドは R 用・Sb 用を区別せず<strong>単一の nAvg を両方の計算に使う</strong>ため、両者が大きく異なる地盤では値の使い分けを利用者が判断すること</li>
       </ul>
     </div>
   </section>
