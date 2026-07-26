@@ -325,7 +325,9 @@ namespace SheetPileQuayWall.Plugin.Commands
 
         // 本管(+ 閉端底板)を 1 ソリッドに集約し、傾斜・整列位置への変換まで行う。
         // 控え杭は継手を持たない単独杭である。
-        private static Autodesk.AutoCAD.DatabaseServices.Solid3d BuildSolid(
+        // internal: ImportCommands の CSV 一括生成から再利用するため
+        // (ソリッド生成ロジックの重複を避ける)。
+        internal static Autodesk.AutoCAD.DatabaseServices.Solid3d BuildSolid(
             SheetPileQuayWall.Core.AnchorPile.AnchorInput a,
             SheetPileQuayWall.Core.AnchorPile.AnchorResult result)
         {

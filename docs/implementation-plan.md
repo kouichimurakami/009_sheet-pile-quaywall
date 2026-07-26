@@ -12,6 +12,7 @@
 > - 2026-07-26 第3版 (e): フェーズ 4 のブロッカーを一括解決 — 決定9(XData を 008 の キー=値 + `fmt` 方式に統一。§6.1 新設、位置依存とする旧記載を差し替え)、決定10(`_JointModel` は移植しない。コマンド 12→11 個)、決定11(旧 RegApp 図面との互換は持たない)。§12 の項目 2・4・5 が解決し、フェーズ 4 のブロッカーは無くなった。残る未解決はフェーズ 5 の項目 3・7 と、記録のみの項目 8。
 > - 2026-07-26 第3版 (f): フェーズ 4(Plugin)完了。XData 3 種(決定9 のキー=値方式)+ コマンド 11 個 + 共通ヘルパー 3 種を実装し、スタブビルドがエラー 0・警告 0。スタブに Polyline/Circle/Region/DBObjectCollection/Point2d/Handle/BooleanOperationType 等を追加。§3・§6 を実装に合わせて更新し、§13.5 に実機手動検証項目 8 件を追加。
 > - 2026-07-26 第3版 (g): フェーズ 5(仕上げ)完了、335 テスト green。§12 項目3(Dynamo 範囲)を決定、項目7(継手質量の側別配分)を `JointShapes` の実形状から解決し、**移植元 007 `JointCatalog.JointMassPerM` が P-P 形で鋼管を 1 本分しか数えないバグを発見**。`FrontWall.JointMass`・`QuayWallEstimate`・`SPQW_QUAYWALL_Estimate`・Dynamo ノード 2 個・README(9 章構成)を追加。残る未解決は記録のみの項目 8。
+> - 2026-07-26 第3版 (k): **帳票 CSV 取り込みを追加**、524 テスト green。サーチマス等の積算ソフト出力を CSV UTF-8 で保存したものから前壁・タイロッド・控え杭のパラメータを一括入力する `Core.Import` 名前空間(CsvTable・SpecTextParser・FrontWallCsvImporter・TieRodCsvImporter・AnchorPileCsvImporter・QuantityReconciliation、6 ファイル)と `Plugin.Commands.ImportCommands`(4 コマンド。14→18)を新設。前壁 CSV は §9.2 にあった「壁一括生成が無い」を解消(直線配置・累積有効幅による自動 Y 配置、施工順位が無ければファイル総行数と出現順で自動採番)。1 行の不備で取り込み全体を止めない設計(行番号付きエラー一覧 + 残り行は生成)。`SPQW_QUAYWALL_ReconcileCsv` は帳票の数量・質量と 009 計算値を許容誤差 1% で突合する。既存 `TieRodCommands.BuildSolid` / `AnchorPileCommands.BuildSolid` を `private→internal` にしてソリッド生成ロジックの重複を避け、`QuayWallCommands.Estimate()` から `BuildCompositionFromPrompts` を抽出して突合検証と共有した(挙動は変えない純粋な抽出)。**実際のサーチマス等のエクスポート列名・レイアウトは未確認**であり、列名は別名リストで解決する設計とした(README §9.1 に記録)。
 > - 2026-07-26 第3版 (j): **振動工法・ジェット併用の打設歩掛積算を追加**、475 テスト green。積算基準 3章16節 3-1(3-16-11〜25)から `FrontWall.VibroJetEstimate` を新設し、`SPQW_FRONTWALL_VibroJetEstimate` コマンド(13→14 個)を追加。規格選定の基礎が 3-2 と根本的に異なり(**必要偏心モーメント K₀ = A₀×Wp×98**)、陸上/海上とも適用できる。基本振幅係数 A₀ 表と 1m 当り打込み時間 γ 表は土質のくくり方が異なる(粘性土は A₀ では砂質土等、γ では γ₃ 側)ため、`JetLayerType` で受けて両表へ振り分ける。**噴射ノズル数・ジェット使用台数の表(3-16-16)はセル結合により OCR 復元不能**のため推測せず利用者入力とした。配管系部材・導材・拘束費は別代価表につき範囲外。
 > - 2026-07-26 第3版 (i): **振動工法(バイブロハンマ)の打設歩掛積算を追加**、382 テスト green。積算基準 3章16節 3-2(3-16-26〜31)から `FrontWall.VibroEstimate` を新設し、`SPQW_FRONTWALL_VibroEstimate` コマンド(12→13 個)を追加。4節 3-4.5 の注記「バイブロハンマによる場合は 16節 仮設工を適用することができる」に従い、打撃工法(`DriveEstimate`)とは別モジュール・別コマンドとして実装した。**鋼管矢板には継手の貫入抵抗 Rj = R1×10⁻¹ が加算される**点が打撃工法との実質的な差(3-16-29)。適用範囲は海上打設のみで、ウォータージェット併用(16節 3-1)は範囲外。
 > - 2026-07-26 第3版 (h): 実装後の批判的レビュー指摘を反映 — ① 前壁挿入点を 1011(World 座標点)で併記保存し読み側で優先(決定9 でキー=値の文字列化により失われていた MOVE 追随を復活。§6・§6.1)、② タイロッドの鋼種・設計基準・荷重状態プロンプトを追加(008 `TryGrade`/`TryCode`/`TryState` 相当の移植漏れ修正)し、積算基準表内の径(φ38〜φ65)はナット高さ・調節長を自動設定、③ タイロッドのプロンプト範囲 5 項目を Core 検証範囲に一致、④ §4 に `SPQW_QUAYWALL_Estimate` を追加・Dynamo ノード名を実装(`CalcSection`・`CalcQuayWallQuantity`)に更新・`ProtoGeometry.dll` の参照記載を削除、⑤ `SPQW_ANCHORPILE_Query` に積算数量出力(1 本あたり)を復元(006 同等)、⑥ `SPQW_TIEROD_Action` は Y を保持して同位置再生成(§2.4 整合)。
@@ -168,6 +169,10 @@
 | `SPQW_ANCHORPILE_Action` | `ANCHORPILE_Action`(006) | 前壁基準の整列位置に再生成 |
 | `SPQW_ANCHORPILE_Query` | `ANCHORPILE_Query`(006) | 諸元・整列座標・積算数量(1 本あたり)を出力 |
 | `SPQW_QUAYWALL_Estimate` | (新設。旧版に相当なし) | 岸壁 1 施設分の鋼材質量を 3 部材まとめて集計(フェーズ 5) |
+| `SPQW_FRONTWALL_ImportCsv` | (新設。旧版に相当なし) | 帳票 CSV から前壁鋼管矢板を一括生成(壁一括生成。第3版(k)) |
+| `SPQW_TIEROD_ImportCsv` | (新設。旧版に相当なし) | 前壁選択 → 帳票 CSV からタイロッドを一括生成(第3版(k)) |
+| `SPQW_ANCHORPILE_ImportCsv` | (新設。旧版に相当なし) | 前壁選択 → 帳票 CSV から控え杭を一括生成(第3版(k)) |
+| `SPQW_QUAYWALL_ReconcileCsv` | (新設。旧版に相当なし) | 帳票の数量・質量と 009 の計算値を突合検証(第3版(k)) |
 
 Dynamo ノード(`SpqwNodes` クラス): `CalcSection`(007 `SpspNodes` 移植)・`CalcQuayWallQuantity`(009 新設)。ジオメトリ生成ノード(007 `CreateSolid` 相当)は移植しない(§12 項目3 の決定)。
 

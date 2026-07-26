@@ -479,7 +479,9 @@ namespace SheetPileQuayWall.Plugin.Commands
         }
 
         // 軸線に沿った円柱。CreateFrustum は Z 軸方向に作るため Y 軸まわりに倒す。
-        private static Autodesk.AutoCAD.DatabaseServices.Solid3d BuildSolid(
+        // internal: ImportCommands の CSV 一括生成から再利用するため
+        // (ソリッド生成ロジックの重複を避ける)。
+        internal static Autodesk.AutoCAD.DatabaseServices.Solid3d BuildSolid(
             SheetPileQuayWall.Core.TieRod.TieRodResult r, double baseX, double rodY)
         {
             double radius = r.NominalDiameter / 2.0;

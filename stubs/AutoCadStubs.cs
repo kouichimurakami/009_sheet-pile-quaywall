@@ -454,6 +454,15 @@ namespace Autodesk.AutoCAD.EditorInput
         public void AddAllowedClass(System.Type type, bool exactMatch) { }
     }
 
+    public sealed class PromptStringOptions : PromptOptions
+    {
+        public PromptStringOptions(string message) { Message = message; }
+        public string Message { get; }
+        public bool AllowSpaces { get; set; }
+        public string DefaultValue { get; set; }
+        public bool UseDefaultValue { get; set; }
+    }
+
     public class PromptResult
     {
         public PromptStatus Status
@@ -532,6 +541,11 @@ namespace Autodesk.AutoCAD.EditorInput
         }
 
         public PromptEntityResult GetEntity(PromptEntityOptions options)
+        {
+            throw new System.NotSupportedException("AutoCAD スタブです。");
+        }
+
+        public PromptResult GetString(PromptStringOptions options)
         {
             throw new System.NotSupportedException("AutoCAD スタブです。");
         }

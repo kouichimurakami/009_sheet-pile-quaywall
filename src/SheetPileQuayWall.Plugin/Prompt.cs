@@ -136,6 +136,32 @@ namespace SheetPileQuayWall.Plugin
             return true;
         }
 
+        // 文字列入力(CSV ファイルパス等)。前後の空白は残す(パスの一部の可能性があるため)。
+        public static bool TryAskString(
+            Autodesk.AutoCAD.EditorInput.Editor ed, string message,
+            string defaultValue, out string value)
+        {
+            value = defaultValue;
+
+            Autodesk.AutoCAD.EditorInput.PromptStringOptions opt =
+                new Autodesk.AutoCAD.EditorInput.PromptStringOptions(message);
+            opt.AllowSpaces = true;
+            opt.DefaultValue = defaultValue;
+            opt.UseDefaultValue = !string.IsNullOrEmpty(defaultValue);
+            opt.AllowNone = true;
+
+            Autodesk.AutoCAD.EditorInput.PromptResult res = ed.GetString(opt);
+            if (res.Status != Autodesk.AutoCAD.EditorInput.PromptStatus.OK &&
+                res.Status != Autodesk.AutoCAD.EditorInput.PromptStatus.None)
+            {
+                return false;
+            }
+
+            value = res.Status == Autodesk.AutoCAD.EditorInput.PromptStatus.None
+                ? defaultValue : res.StringResult;
+            return true;
+        }
+
         // Core の検証関数が返すエラーメッセージを表示する。null なら true(正常)。
         public static bool Report(
             Autodesk.AutoCAD.EditorInput.Editor ed, string? error)
