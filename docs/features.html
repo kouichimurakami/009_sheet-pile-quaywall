@@ -1,0 +1,935 @@
+<title>009_sheet-pile-quaywall 機能説明</title>
+
+<style>
+  :root {
+    --ink:        #0F1A1F;
+    --ink-2:      #46606B;
+    --ink-3:      #6B858F;
+    --ground:     #E8ECEE;
+    --surface:    #FFFFFF;
+    --surface-2:  #F2F5F6;
+    --line:       #C8D2D6;
+    --line-soft:  #DCE3E6;
+    --steel:      #2F6D85;
+    --steel-soft: #E1EBEF;
+    --oxide:      #B0533A;
+    --oxide-soft: #F5E6E1;
+    --amber:      #8A6A1F;
+    --amber-soft: #F6EEDA;
+
+    --display: "Hiragino Mincho ProN", "HiraMinProN-W3", "Yu Mincho", "YuMincho",
+               "Noto Serif JP", "Source Han Serif JP", "MS PMincho", serif;
+    --body:    "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", "YuGothic",
+               "Noto Sans JP", "Meiryo", system-ui, sans-serif;
+    --data:    ui-monospace, "SF Mono", SFMono-Regular, "Cascadia Mono", Menlo,
+               Consolas, "Noto Sans Mono", monospace;
+
+    --rail: 3.75rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink:        #DCE6EA;
+      --ink-2:      #9DB3BC;
+      --ink-3:      #7A929C;
+      --ground:     #0B1418;
+      --surface:    #121D22;
+      --surface-2:  #17242A;
+      --line:       #2A3C44;
+      --line-soft:  #1E2E35;
+      --steel:      #6FB2CB;
+      --steel-soft: #16303B;
+      --oxide:      #D9805F;
+      --oxide-soft: #341C15;
+      --amber:      #C9A24B;
+      --amber-soft: #2C2411;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ink:        #DCE6EA;
+    --ink-2:      #9DB3BC;
+    --ink-3:      #7A929C;
+    --ground:     #0B1418;
+    --surface:    #121D22;
+    --surface-2:  #17242A;
+    --line:       #2A3C44;
+    --line-soft:  #1E2E35;
+    --steel:      #6FB2CB;
+    --steel-soft: #16303B;
+    --oxide:      #D9805F;
+    --oxide-soft: #341C15;
+    --amber:      #C9A24B;
+    --amber-soft: #2C2411;
+  }
+
+  :root[data-theme="light"] {
+    --ink:        #0F1A1F;
+    --ink-2:      #46606B;
+    --ink-3:      #6B858F;
+    --ground:     #E8ECEE;
+    --surface:    #FFFFFF;
+    --surface-2:  #F2F5F6;
+    --line:       #C8D2D6;
+    --line-soft:  #DCE3E6;
+    --steel:      #2F6D85;
+    --steel-soft: #E1EBEF;
+    --oxide:      #B0533A;
+    --oxide-soft: #F5E6E1;
+    --amber:      #8A6A1F;
+    --amber-soft: #F6EEDA;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 16px;
+    line-height: 1.85;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "palt" 1;
+  }
+
+  .page {
+    max-width: 62rem;
+    margin: 0 auto;
+    padding: 0 1.5rem 6rem;
+  }
+
+  /* ── マスト ─────────────────────────────────── */
+
+  .mast {
+    padding: 4.5rem 0 2.5rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .eyebrow {
+    font-family: var(--data);
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0 0 1.25rem;
+  }
+
+  .mast h1 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: clamp(1.9rem, 5vw, 3rem);
+    line-height: 1.3;
+    letter-spacing: 0.01em;
+    margin: 0 0 1rem;
+    text-wrap: balance;
+  }
+
+  .mast .lede {
+    font-size: 1.05rem;
+    color: var(--ink-2);
+    max-width: 40em;
+    margin: 0 0 2.25rem;
+  }
+
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 2.75rem;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+  }
+
+  .facts div {
+    padding: 0.6rem 0;
+  }
+
+  .facts dt {
+    font-family: var(--data);
+    font-size: 0.68rem;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  .facts dd {
+    margin: 0.15rem 0 0;
+    font-family: var(--data);
+    font-size: 1.15rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--steel);
+  }
+
+  .facts dd small {
+    font-size: 0.8rem;
+    color: var(--ink-2);
+    margin-left: 0.35em;
+  }
+
+  /* ── 節 ───────────────────────────────────── */
+
+  .sec {
+    display: grid;
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+    gap: 0 1.5rem;
+    padding: 3.25rem 0 0;
+  }
+
+  .sec > .mark {
+    font-family: var(--data);
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    color: var(--ink-3);
+    padding-top: 0.72rem;
+    border-top: 2px solid var(--steel);
+    text-align: left;
+  }
+
+  .sec > .body {
+    min-width: 0;
+    border-top: 1px solid var(--line);
+    padding-top: 0.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.15rem;
+  }
+
+  .sec h2 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 1.5rem;
+    line-height: 1.45;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .sec h3 {
+    font-family: var(--body);
+    font-weight: 700;
+    font-size: 0.94rem;
+    letter-spacing: 0.02em;
+    margin: 0.6rem 0 0;
+    color: var(--ink);
+  }
+
+  .sec p {
+    margin: 0;
+    max-width: 44em;
+  }
+
+  .sec p.note {
+    font-size: 0.88rem;
+    color: var(--ink-2);
+  }
+
+  /* ── 断面図 ───────────────────────────────── */
+
+  .figure {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--oxide);
+    padding: 1.4rem 0;
+  }
+
+  .figure pre {
+    margin: 0;
+    padding: 0 1.4rem;
+    overflow-x: auto;
+    font-family: var(--data);
+    font-size: 0.72rem;
+    line-height: 1.55;
+    color: var(--ink-2);
+    white-space: pre;
+  }
+
+  .figure figcaption {
+    padding: 1rem 1.4rem 0;
+    margin-top: 1rem;
+    border-top: 1px solid var(--line-soft);
+    font-size: 0.82rem;
+    color: var(--ink-3);
+  }
+
+  /* ── 表 ───────────────────────────────────── */
+
+  .tw {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 34rem;
+    font-size: 0.87rem;
+  }
+
+  thead th {
+    background: var(--surface-2);
+    font-family: var(--body);
+    font-weight: 700;
+    font-size: 0.74rem;
+    letter-spacing: 0.07em;
+    text-align: left;
+    color: var(--ink-2);
+    padding: 0.7rem 0.9rem;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+
+  tbody td {
+    padding: 0.68rem 0.9rem;
+    border-bottom: 1px solid var(--line-soft);
+    vertical-align: top;
+    line-height: 1.65;
+  }
+
+  tbody tr:last-child td { border-bottom: 0; }
+
+  td.cmd, th.cmd { white-space: nowrap; }
+
+  code {
+    font-family: var(--data);
+    font-size: 0.86em;
+    color: var(--steel);
+    word-break: break-word;
+  }
+
+  td.num {
+    font-family: var(--data);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .dash { color: var(--ink-3); }
+
+  /* ── ラベル ───────────────────────────────── */
+
+  .pill {
+    display: inline-block;
+    font-family: var(--data);
+    font-size: 0.66rem;
+    letter-spacing: 0.06em;
+    padding: 0.12em 0.5em;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+  }
+
+  .pill.ok   { color: var(--steel); }
+  .pill.warn { color: var(--amber); }
+  .pill.crit { color: var(--oxide); }
+
+  /* ── 注意ブロック ─────────────────────────── */
+
+  .alert {
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--oxide);
+    background: var(--surface);
+    padding: 1.1rem 1.3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .alert .hd {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--oxide);
+    letter-spacing: 0.02em;
+  }
+
+  .alert p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--ink-2);
+    max-width: none;
+  }
+
+  .alert.amber { border-left-color: var(--amber); }
+  .alert.amber .hd { color: var(--amber); }
+
+  /* ── 手順 ─────────────────────────────────── */
+
+  ol.flow {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: step;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  ol.flow li {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 1.9rem minmax(0, 1fr);
+    gap: 0 0.75rem;
+    align-items: baseline;
+  }
+
+  ol.flow li::before {
+    content: counter(step);
+    font-family: var(--data);
+    font-size: 0.78rem;
+    color: var(--steel);
+    border-bottom: 1px solid var(--steel);
+    padding-bottom: 0.1rem;
+  }
+
+  ol.flow strong {
+    font-weight: 700;
+  }
+
+  /* ── コード ───────────────────────────────── */
+
+  .code {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    overflow-x: auto;
+    padding: 1rem 1.2rem;
+    margin: 0;
+    font-family: var(--data);
+    font-size: 0.79rem;
+    line-height: 1.75;
+    color: var(--ink-2);
+  }
+
+  .code b { color: var(--ink); font-weight: 400; }
+  .code i { color: var(--ink-3); font-style: normal; }
+
+  /* ── 一覧 ─────────────────────────────────── */
+
+  ul.plain {
+    margin: 0;
+    padding-left: 1.15rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  ul.plain li { padding-left: 0.2rem; }
+  ul.plain li::marker { color: var(--steel); }
+
+  /* ── 締め ─────────────────────────────────── */
+
+  .colophon {
+    margin-top: 4rem;
+    padding-top: 1.4rem;
+    border-top: 1px solid var(--line);
+    font-size: 0.8rem;
+    color: var(--ink-3);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.75rem;
+  }
+
+  .colophon span { font-family: var(--data); }
+
+  a { color: var(--steel); }
+  a:focus-visible,
+  summary:focus-visible {
+    outline: 2px solid var(--oxide);
+    outline-offset: 2px;
+  }
+
+  @media (max-width: 40rem) {
+    :root { --rail: 2.5rem; }
+    .sec { gap: 0 1rem; }
+    .facts { gap: 0 1.75rem; }
+    body { font-size: 15px; }
+  }
+</style>
+
+<div class="page">
+
+  <header class="mast">
+    <p class="eyebrow">AutoCAD 2025 / Civil 3D 2025 プラグイン</p>
+    <h1>鋼管矢板式岸壁の<br>パラメトリックモデル生成と積算</h1>
+    <p class="lede">
+      前壁鋼管矢板・タイロッド・控え杭からなる岸壁を、単一の DLL で 3D モデル生成から
+      施工歩掛積算まで一貫して扱う。<code>006_steel-pipe-pile</code> /
+      <code>007_steel-pipe-sheet-pile</code> / <code>008_tairod</code> の統合後継であり、
+      009 単独でビルド・実行できる。
+    </p>
+    <dl class="facts">
+      <div>
+        <dt>Commands</dt>
+        <dd>18<small>個</small></dd>
+      </div>
+      <div>
+        <dt>Core Tests</dt>
+        <dd>524<small>件 green</small></dd>
+      </div>
+      <div>
+        <dt>Target</dt>
+        <dd>.NET 8.0<small>net8.0-windows x64</small></dd>
+      </div>
+      <div>
+        <dt>Dynamo</dt>
+        <dd>3.3<small>Zero Touch</small></dd>
+      </div>
+    </dl>
+  </header>
+
+  <!-- ───────────────────────────────────────── -->
+  <section class="sec">
+    <div class="mark">構造</div>
+    <div class="body">
+      <h2>3 部材が D.L. という単一の基準に乗る</h2>
+      <p>
+        座標系は X が法線直角方向(陸側 +X / 海側 −X)、Y が施設延長方向、Z が鉛直上向き。
+        <strong>Z = 0 を D.L.(基本水準面)に統一</strong>したことで、杭先端標高もタイロッド軸心標高も、
+        図面に書かれた数値がそのまま Z 座標になる。3 部材の標高を突き合わせる整合チェックが
+        常に同一基準で成立する。
+      </p>
+
+      <figure class="figure">
+<pre>      海側 −X                     X = 0                               陸側 +X
+                                    ┃
+   杭頭標高 ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┓┃
+                                  ┃┃      腹起し(矢板半割部)   定着プレート・ワッシャー・ナット
+   Z_tr ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┃┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫┓┄┄┄ タイロッド軸心
+  (= H.W.L. + 0.5)                ┃┃                            ┃┃
+   D.L.±0.000 ━━━━━━━━━━━━━━━━━━━━╋╋━━━━━━━━━━━━━━━━━━━━━━━━━━━━╋╋━━━ 基本水準面 Z = 0
+                                  ┃┃                            ┃┃
+                   前壁鋼管矢板 → ┃┃                            ┃┃ ← 控え杭
+                   (傾斜角 θ 可)  ┃┃                            ┃┃   (傾斜角 θ_a 可)
+                                  ┗┛                            ┗┛
+   Z_tip ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ 杭先端(挿入点)
+                                    │←────────── span ─────────→│
+                                       (前壁矢板中心 〜 控え杭陸側定着面)</pre>
+        <figcaption>
+          span は「前壁矢板中心 〜 控え杭の陸側定着面」の水平距離(積算基準 3-4.5-(13))。
+          タイロッドと控え杭はこの値と前壁の Handle から位置を都度計算するため、平面 X 座標を保存しない。
+        </figcaption>
+      </figure>
+
+      <h3>部材が互いに追随する</h3>
+      <p>
+        前壁の挿入点は XData に <code>tip_x/_y/_z</code> の文字列と <strong>World 座標点(DxfCode 1011)</strong>
+        を併記保存し、読み取り時は 1011 を優先する。1011 は AutoCAD が MOVE などの変換に自動追随させるため、
+        前壁を移動しても <code>_Action</code> は移動先で再生成される。タイロッド・控え杭は前壁 Handle から
+        位置を再計算するので、前壁の移動にも傾斜角 θ の変更にも整列位置が追随する。
+      </p>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────── -->
+  <section class="sec">
+    <div class="mark">コマンド</div>
+    <div class="body">
+      <h2>モデル生成・照会・積算・一括取り込み</h2>
+      <p>
+        接頭辞は <code>SPQW</code>(Sheet Pile Quay Wall)。
+        <code>_Create</code> は入力から Solid3d を生成して XData に記録、
+        <code>_Action</code> は既存を選択して同位置に再生成、
+        <code>_Query</code> と <code>_Estimate</code> は図形を変更しない。
+      </p>
+
+      <h3>前壁鋼管矢板 — レイヤー「前壁鋼管矢板」</h3>
+      <div class="tw">
+        <table>
+          <thead>
+            <tr><th class="cmd">コマンド</th><th>内容</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="cmd"><code>SPQW_FRONTWALL_Create</code></td>
+              <td>対話入力から Solid3d を生成。実形状の継手(LT65/LT75/LT100/PP/PT)と傾斜角に対応</td>
+            </tr>
+            <tr>
+              <td class="cmd"><code>SPQW_FRONTWALL_Action</code></td>
+              <td>諸元を再入力して同位置に再生成。MOVE 後は移動先に追随する</td>
+            </tr>
+            <tr>
+              <td class="cmd"><code>SPQW_FRONTWALL_Query</code></td>
+              <td>断面性能(日本製鉄 K011)・有効幅 B・継手要否・質量を出力</td>
+            </tr>
+            <tr>
+              <td class="cmd"><code>SPQW_FRONTWALL_Estimate</code></td>
+              <td>打撃工法の打設歩掛積算 <span class="pill ok">4節 3-4.5</span></td>
+            </tr>
+            <tr>
+              <td class="cmd"><code>SPQW_FRONTWALL_VibroEstimate</code></td>
+              <td>振動工法・バイブロ単独の打設歩掛積算 <span class="pill ok">16節 3-2</span></td>
+            </tr>
+            <tr>
+              <td class="cmd"><code>SPQW_FRONTWALL_VibroJetEstimate</code></td>
+              <td>振動工法・ジェット併用の打設歩掛積算 <span class="pill ok">16節 3-1</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>タイロッド・控え杭・施設全体</h3>
+      <div class="tw">
+        <table>
+          <thead>
+            <tr><th class="cmd">コマンド</th><th>内容</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="cmd"><code>SPQW_TIEROD_Create</code></td>
+              <td>前壁を選択し、組数分の Solid3d を生成。海側取付点 X は前壁の θ・Z_tip から自動計算</td>
+            </tr>
+            <tr>
+              <td class="cmd"><code>SPQW_TIEROD_Action</code></td>
+              <td>前壁の現在位置に基づき再計算して再生成(Y は保存値を保持)</td>
+            </tr>
+            <tr>
+              <td class="cmd"><code>SPQW_TIEROD_Query</code></td>
+              <td>諸元・張力照査(鋼種・設計基準・荷重状態)・受杭数量を出力</td>
+            </tr>
+            <tr>
+              <td class="cmd"><code>SPQW_TIEROD_Color</code></td>
+              <td>色番号のみ変更</td>
+            </tr>
+            <tr>
+              <td class="cmd"><code>SPQW_ANCHORPILE_Create</code></td>
+              <td>前壁を選択し、タイロッド軸線に整列した控え杭を生成</td>
+            </tr>
+            <tr>
+              <td class="cmd"><code>SPQW_ANCHORPILE_Action</code></td>
+              <td>前壁基準の整列位置に再生成(MOVE していても整列位置へ戻る)</td>
+            </tr>
+            <tr>
+              <td class="cmd"><code>SPQW_ANCHORPILE_Query</code></td>
+              <td>諸元・整列座標・杭面間浄距離・積算数量(1 本あたり)を出力</td>
+            </tr>
+            <tr>
+              <td class="cmd"><code>SPQW_QUAYWALL_Estimate</code></td>
+              <td>代表部材を選択し、岸壁 1 施設分の鋼材質量を 3 部材まとめて集計</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>帳票 CSV 取り込み</h3>
+      <div class="tw">
+        <table>
+          <thead>
+            <tr><th class="cmd">コマンド</th><th>内容</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="cmd"><code>SPQW_FRONTWALL_ImportCsv</code></td>
+              <td>CSV から前壁を<strong>一括生成</strong>。1 本目の位置だけピックすれば、以降は有効幅 B の累積で自動配置</td>
+            </tr>
+            <tr>
+              <td class="cmd"><code>SPQW_TIEROD_ImportCsv</code></td>
+              <td>前壁を選択し、CSV からタイロッドを一括生成</td>
+            </tr>
+            <tr>
+              <td class="cmd"><code>SPQW_ANCHORPILE_ImportCsv</code></td>
+              <td>前壁を選択し、CSV から控え杭を一括生成</td>
+            </tr>
+            <tr>
+              <td class="cmd"><code>SPQW_QUAYWALL_ReconcileCsv</code></td>
+              <td>帳票の数量・質量と 009 の計算値を突合し、許容誤差(既定 1%)超過を検出</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>基本的な流れ</h3>
+      <ol class="flow">
+        <li><span><strong>前壁を作る。</strong>施工順位を指定すると、継手の要否と雌雄が順位から自動判定される(1 本目は +Y 側のみ、最終本は −Y 側のみ)。帳票があれば <code>ImportCsv</code> で壁全体を一括生成できる。</span></li>
+        <li><span><strong>前壁を選んでタイロッドを置く。</strong>海側取付点 X は前壁の傾斜角と杭先端標高から自動算出されるため、指定するのは施設延長方向の Y だけでよい。</span></li>
+        <li><span><strong>前壁を選んで控え杭を置く。</strong>span から整列位置が決まり、杭面間浄距離が負(干渉)ならエラー停止する。</span></li>
+        <li><span><strong>数量を集計し、打設歩掛を積算する。</strong>工法は下表から 1 つを選ぶ。帳票があれば突合検証にかけられる。</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────── -->
+  <section class="sec">
+    <div class="mark">積算</div>
+    <div class="body">
+      <h2>打設工法は 3 つ、混用してはならない</h2>
+      <p>
+        3 つの打設積算コマンドは積算基準上の<strong>別節・別歩掛</strong>であり、
+        規格選定の基礎も労務編成も基準作業能力係数も異なる。どれを適用するかは
+        現場条件・土質条件から利用者が判断する。
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead>
+            <tr>
+              <th>工法</th><th>出典</th><th>規格選定の基礎</th><th>施工区分</th><th>ei</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>打撃<br><span class="dash">ディーゼル / 油圧ハンマ</span></td>
+              <td class="num">4節 3-4.5</td>
+              <td>鋼材質量 + 貫入抵抗値 R</td>
+              <td>陸上 / 海上</td>
+              <td class="num">陸 0.90<br>海 0.50</td>
+            </tr>
+            <tr>
+              <td>振動<br><span class="dash">バイブロ単独</span></td>
+              <td class="num">16節 3-2</td>
+              <td>鋼材質量 + R<br><span class="dash">継手抵抗 Rj = R1 × 10⁻¹ を加算</span></td>
+              <td><strong>海上のみ</strong></td>
+              <td class="num">0.70</td>
+            </tr>
+            <tr>
+              <td>振動<br><span class="dash">ジェット併用</span></td>
+              <td class="num">16節 3-1</td>
+              <td><strong>必要偏心モーメント K₀</strong><br><span class="dash">K₀ = A₀ × Wp × 98</span></td>
+              <td>陸上 / 海上</td>
+              <td class="num">陸 0.80<br>海 0.70</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="note">
+        鋼管矢板の貫入抵抗値は、打撃工法には継手項がないのに対し、振動工法では本管の 10% が加算される。
+        同一諸元でも選定規格が 1 ランク上がり得る、実質的な差である。
+      </p>
+
+      <h3>基準の適用工法表(3-1-3)</h3>
+      <div class="tw">
+        <table>
+          <thead>
+            <tr>
+              <th>条件</th><th>ディーゼル</th><th>油圧</th><th>バイブロ</th><th>ジェット併用</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>騒音への配慮が必要</td><td class="num dash">−</td><td class="num">○</td><td class="num">○</td><td class="num">○</td></tr>
+            <tr><td>振動への配慮が必要</td><td class="num dash">−</td><td class="num dash">−</td><td class="num dash">−</td><td class="num">○</td></tr>
+            <tr><td>油飛散等への配慮が必要</td><td class="num dash">−</td><td class="num">○</td><td class="num">○</td><td class="num">○</td></tr>
+            <tr><td>支持層へ打込む / 中間層を打抜く</td><td class="num">○</td><td class="num">○</td><td class="num"><strong>−</strong></td><td class="num">○</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="note">
+        支持層へ打込む場合・中間層を打抜く場合、バイブロ単独は標準適用外であり、ジェット併用が必要になる。
+        ジェット併用の適用範囲は外径 1,500 mm 以下・全長 40 m 以下(3-1-3 注3)。
+      </p>
+
+      <h3>算出値には信頼度を付す</h3>
+      <p>
+        出典のある式で求まるものを <span class="pill ok">確定</span>、
+        密度換算などを含むものを <span class="pill warn">概算</span>、
+        カタログに式がなく代替値を用いたものを <span class="pill crit">推定</span> として区別する。
+        断面性能・有効幅・貫入抵抗・打設日数・労務編成はいずれも確定。
+        控え杭の閉端底板質量は概算、前壁 LT100 の有効幅は推定にあたる。
+      </p>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────── -->
+  <section class="sec">
+    <div class="mark">取り込み</div>
+    <div class="body">
+      <h2>帳票からパラメータを流し込む</h2>
+      <p>
+        積算ソフトの出力を CSV UTF-8 形式で保存したものを読み込み、対話入力を省いて一括生成する。
+        列名は別名リスト(<code>outer_d_mm</code> / <code>外径</code> / <code>D</code> など)で解決し、
+        大文字小文字を無視する。個別列がない場合は「規格」列から
+        <code>φ800×12 L=20.0m LT75</code> のような表記を正規表現で抽出する。
+      </p>
+
+      <h3>1 行の不備で全体を止めない</h3>
+      <p>
+        数十行の帳票に 1 行だけ誤記があっても、エラー行を行番号付きで一覧表示したうえで、
+        残りの行は生成する。前壁の施工順位は「ファイルの総行数と出現順」を基準に自動採番するため、
+        途中の行が取り込みに失敗しても、残った行の先頭・末尾判定(=継手の要否)はずれない。
+      </p>
+
+      <pre class="code"><i>--- 取り込めなかった行 (1 件) ---</i>
+  <b>3 行目</b>: 継手形式 'BADCODE' は未知のコードです(LT65/LT75/LT100/PP/PT のいずれか)。
+<b>2 本を生成しました。</b></pre>
+
+      <h3>突合検証</h3>
+      <p>
+        「項目, 数量」の 2 列 CSV を読み、施設延長・継手接続数・前壁本管質量・前壁継手質量・
+        タイロッド質量・控え杭質量・合計質量の 7 項目について、帳票値と 009 の計算値を並べて
+        差と許容判定を出力する。帳票値が 0 の項目は絶対差で判定する。
+      </p>
+
+      <pre class="code">=== 帳票との突合検証 (許容誤差 1%) ===
+  施設延長 [m]        : 帳票      120.0 / 009      120.0 / 差        0.0 <b>(OK)</b>
+  前壁 本管質量 [kg]  : 帳票    46000.0 / 009    46637.0 / 差      637.0 <b>(OK)</b>
+  合計質量 [kg]       : 帳票    63755.0 / 009    65500.0 / 差     1745.0 <i>(NG — 許容誤差超過)</i></pre>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────── -->
+  <section class="sec">
+    <div class="mark">Dynamo</div>
+    <div class="body">
+      <h2>計算層は Zero Touch Node からも呼べる</h2>
+      <p>
+        Civil 3D 2025 同梱の Dynamo 3.3。カテゴリは <code>SheetPileQuayWall.Plugin &gt; Dynamo</code>。
+        戻り値は <code>[MultiReturn]</code> で、辞書キーに日本語を用いる。
+        ジオメトリを扱わない純計算のため <code>ProtoGeometry.dll</code> は参照しない。
+      </p>
+
+      <pre class="code"> [Number] D_mm ──────┐
+ [Number] t_mm ──────┤
+ [Number] L_m  ──────┤── <b>SpqwNodes.CalcSection</b> ──┬── 断面積 A [cm2]
+ [String] jointType ─┘                           ├── 断面係数 Z [cm3]
+                                                 ├── 断面2次モーメント I [cm4]
+                                                 ├── 単位重量 W [kg/m]
+                                                 ├── 本管質量 [kg]
+                                                 ├── 断面2次半径 i [cm]
+                                                 ├── 内径 d [mm]
+                                                 ├── 有効幅 B [mm]
+                                                 └── 継手質量 (1接続) [kg/m]</pre>
+
+      <p class="note">
+        もう 1 つの <code>SpqwNodes.CalcQuayWallQuantity</code> は、前壁・タイロッド・控え杭の
+        諸元と本数から施設 1 件分の鋼材質量を集計する(7 項目を返す)。
+      </p>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────── -->
+  <section class="sec">
+    <div class="mark">設計</div>
+    <div class="body">
+      <h2>Core と Plugin を分ける</h2>
+      <p>
+        計算層(Core)は AutoCAD に依存せず BCL のみを参照するため、WSL / Linux 上で
+        <strong>524 件のテストがそのまま走る</strong>。AutoCAD に依存するのは図形生成・XData・
+        コマンド定義だけで、こちらはスタブとリンクして構文・型検証まで行う。
+      </p>
+
+      <pre class="code">009_sheet-pile-quaywall/
+├── src/SheetPileQuayWall.Core/     <i>AutoCAD 非依存(BCL のみ)</i>
+│   ├── FrontWall/                  <i>断面性能・継手・打設歩掛 3 工法</i>
+│   ├── TieRod/                     <i>タイロッド計算・配置</i>
+│   ├── AnchorPile/                 <i>控え杭の整列計算</i>
+│   ├── Import/                     <i>帳票 CSV 取り込み</i>
+│   ├── CrossMemberValidator.cs     <i>部材間の整合チェック</i>
+│   └── QuayWallEstimate.cs         <i>施設 1 件分の数量集計</i>
+└── src/SheetPileQuayWall.Plugin/   <i>AutoCAD 依存</i>
+    ├── Commands/                   <i>SPQW_* 18 コマンド</i>
+    ├── XData/                      <i>キー=値 + 1011 併記</i>
+    └── Dynamo/SpqwNodes.cs         <i>Zero Touch Node 2 個</i></pre>
+
+      <h3>守っている規約</h3>
+      <ul class="plain">
+        <li><code>using</code> ディレクティブを書かず、型は完全修飾名で記述する(暗黙 using も無効)</li>
+        <li>単位はメートル統一。mm は対話プロンプトと Dynamo 入力の呼称のみで、取得直後に m へ変換する</li>
+        <li>部材 1 本につき Solid3d 1 個に集約する(<code>BoolUnite</code> / <code>BoolSubtract</code>)</li>
+        <li>整合性チェックの誤差許容は 1 mm。不一致はエラー停止し、自動補正も再生成もしない</li>
+        <li>基準の表で「−」のセルは <code>null</code> として扱い、0 に潰さない</li>
+        <li>006 / 007 / 008 への参照を持たない。共通ロジックはコードとして移植する</li>
+      </ul>
+
+      <h3>部材間の整合チェック</h3>
+      <p>
+        統合版の利点として、同じ量を 2 部材が別々に入力している箇所を突き合わせる。
+        タイロッドの海側鋼管矢板径と前壁の外径、タイロッドの矢板ピッチと前壁の有効幅 B、
+        タイロッドの軸心標高と控え杭の Z_tr、タイロッドの span と控え杭の span。
+        いずれも 1 mm の許容で照合し、不一致は生成前に止める。
+      </p>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────── -->
+  <section class="sec">
+    <div class="mark">注意</div>
+    <div class="body">
+      <h2>使う前に知っておくこと</h2>
+
+      <div class="alert">
+        <div class="hd">実機動作は未検証</div>
+        <p>
+          開発機に AutoCAD 2025 / Civil 3D 2025 が入っていないため、Plugin 層はスタブによる
+          構文・型検証までしか行えていない。参照 DLL のバージョンも実測できておらず、
+          不一致は <code>TypeLoadException</code> / <code>MissingMethodException</code> として
+          ランタイムでのみ顕在化する。<strong>実機で <code>scripts/verify-dll-versions.ps1</code> が
+          exit 0 になることを確認するまで配布しないこと。</strong>
+        </p>
+      </div>
+
+      <div class="alert">
+        <div class="hd">積算基準に OCR から復元できなかった表がある</div>
+        <p>
+          ジェット併用の<strong>噴射ノズル数・ジェット使用台数の表</strong>(3-16-16)は、原文のセル結合により
+          どの数値がどのセルか特定できなかった。推測で埋めることはせず、利用者入力として受け取っている。
+          台数さえ決まれば発動発電機・水中ポンプ・水槽は自動決定されるため、<strong>原本の表を確認のうえ入力すること。</strong>
+        </p>
+        <p>
+          このほか、施工規模区分 E3 の係数表も崩れており、打撃工法と同じ「50 本未満 −0.05」と解釈して実装している。
+        </p>
+      </div>
+
+      <div class="alert amber">
+        <div class="hd">帳票 CSV の列名は未検証</div>
+        <p>
+          実際の積算ソフトのエクスポート形式(列名・並び順・エンコード)を確認できていないため、
+          業界の一般的な慣行を仮定して別名リストを組んである。実データが手に入り次第、
+          <code>Core.Import</code> 配下の各インポータに列名を追加すれば対応できる。
+          対応エンコードは UTF-8 のみ。
+        </p>
+      </div>
+
+      <div class="alert amber">
+        <div class="hd">移植元 007 の継手質量にバグがある</div>
+        <p>
+          <code>JointCatalog.JointMassPerM</code> は P-P 形で鋼管を 1 本分(34.7 kg/m)しか数えないが、
+          実形状は両側とも φ165.2×9 の鋼管であり、正しくは 69.4 kg/m。約 50% の過小評価になる。
+          009 では側別質量を持つ <code>JointMass</code> を新設して積算に用いており影響はないが、
+          <strong>007 側の修正は別途必要。</strong>
+        </p>
+      </div>
+
+      <h3>そのほかの限定事項</h3>
+      <ul class="plain">
+        <li>前壁の一括生成は<strong>直線配置のみ</strong>。平面線形が曲がる・折れる岸壁には対応しない</li>
+        <li>ジェット併用の γ は代表 1 層で算定する。互層の現場では Core の <code>WeightedGamma</code> を使うか、加重平均済みの値を入力する</li>
+        <li>ジェット併用の配管系部材・導材・拘束費は別代価表につき未実装</li>
+        <li>鋼材質量の算定基礎が工法間で揃っていない。打撃は本管のみ、振動 2 種は本管 + 継手金物を使う(基準はどちらも「鋼材質量」としか書いていない)</li>
+        <li>端数処理が既存モジュールと異なる。振動 2 種は基準どおりの四捨五入、既存の打撃は .NET 既定の銀行丸めのまま</li>
+        <li>『港湾工事工種体系ツリー』への工種マッピングは未実装</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ───────────────────────────────────────── -->
+  <section class="sec">
+    <div class="mark">ビルド</div>
+    <div class="body">
+      <h2>Core は AutoCAD なしで検証できる</h2>
+
+      <pre class="code"><i># Core + テスト(AutoCAD 不要。524 件が green であること)</i>
+dotnet test tests/SheetPileQuayWall.Core.Tests -c Release
+
+<i># Plugin の構文検証(AutoCAD 不要。スタブとリンクする。配布不可)</i>
+dotnet build src/SheetPileQuayWall.Plugin/SheetPileQuayWall.Plugin.csproj \
+  -c Release -p:UseAutoCadStubs=true
+
+<i># Plugin の実機ビルド(AutoCAD 必須)</i>
+powershell.exe -NoProfile -ExecutionPolicy Bypass \
+  -File scripts/verify-dll-versions.ps1   <i># exit 0 を確認</i>
+dotnet build src/SheetPileQuayWall.Plugin/SheetPileQuayWall.Plugin.csproj -c Release</pre>
+
+      <p class="note">
+        AutoCAD が既定パス以外にある場合は <code>-p:AcadRoot="..."</code> を指定する。
+        レガシー 3 リポジトリから移植した Core の一部は <code>scripts/port-from-legacy.sh</code> が再現し、
+        <code>git show &lt;commit&gt;:&lt;path&gt;</code> で取り出すため冪等に保たれる。
+      </p>
+    </div>
+  </section>
+
+  <footer class="colophon">
+    <span>009_sheet-pile-quaywall</span>
+    <span>18 commands</span>
+    <span>524 tests green</span>
+    <span>AutoCAD 2025 / Civil 3D 2025</span>
+    <span>.NET 8.0 · net8.0-windows · x64</span>
+  </footer>
+
+</div>

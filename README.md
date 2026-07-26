@@ -9,6 +9,7 @@
 > **使用前に §9「注意点・既知の課題」を必ず読むこと。**実機動作は未検証であり、積算基準の一部に OCR から復元できなかった表がある。
 
 設計判断の経緯(決定 1〜11)・フェーズ計画・実機検証項目は [`docs/implementation-plan.md`](docs/implementation-plan.md) を参照。
+機能の概要を図表中心にまとめた HTML 版は [`docs/features.html`](docs/features.html)(ブラウザで開く)。
 
 ---
 
