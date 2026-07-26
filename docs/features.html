@@ -472,7 +472,7 @@
       </div>
       <div>
         <dt>Core Tests</dt>
-        <dd>585<small>件 green</small></dd>
+        <dd>603<small>件 green</small></dd>
       </div>
       <div>
         <dt>Target</dt>
@@ -480,7 +480,7 @@
       </div>
       <div>
         <dt>Dynamo</dt>
-        <dd>3.3<small>Zero Touch × 3</small></dd>
+        <dd>3.3<small>Zero Touch × 7</small></dd>
       </div>
     </dl>
   </header>
@@ -561,7 +561,7 @@
             </tr>
             <tr>
               <td class="cmd"><code>SPQW_FRONTWALL_Estimate</code></td>
-              <td>打撃工法の打設歩掛積算 <span class="pill ok">4節 3-4.5</span></td>
+              <td>打撃工法の打設歩掛積算 <span class="pill ok">4節 3-4.5</span>(杭打機・杭打船・付帯船舶を含む)</td>
             </tr>
             <tr>
               <td class="cmd"><code>SPQW_FRONTWALL_VibroEstimate</code></td>
@@ -612,7 +612,7 @@
             </tr>
             <tr>
               <td class="cmd"><code>SPQW_ANCHORPILE_Estimate</code></td>
-              <td>打撃工法の打設歩掛積算 <span class="pill ok">4節 3-4.6</span>(控え杭は鋼杭式。<strong>陸上打設のみ</strong>)</td>
+              <td>打撃工法の打設歩掛積算 <span class="pill ok">4節 3-4.6</span>(控え杭は鋼杭式。<strong>陸上打設のみ</strong>。クローラ式杭打機を含む)</td>
             </tr>
             <tr>
               <td class="cmd"><code>SPQW_QUAYWALL_Estimate</code></td>
@@ -770,6 +770,43 @@
         <strong>別の質問</strong>として、打設個所の障害物・打設後の異常調査作業が伴う場合のみ計上する。
       </p>
 
+      <h3>打撃工法にも杭打機・杭打船を追加した</h3>
+      <p>
+        振動工法(バイブロ単独)には起重機船・杭打船の選定が実装済みだったが、打撃工法(前壁・控え杭)には
+        無かった。基準原文 3-4.5-14〜15 / 3-4.6-12〜13「作業船・機械の選定」を確認したところ、
+        打撃工法にも同種の表が存在することが判明したため追加した。
+        陸上打設はハンマ規格から<strong>クローラ式杭打機</strong>を選定し、条件該当時(杭置場が遠い・
+        高低差がある・近隣に被害の恐れがある場合)のみ<strong>クローラクレーン</strong>(固定50t吊)を計上する。
+        海上打設(前壁のみ)はハンマ規格から<strong>杭打船</strong>(H-65 / H-125 / H-150)を選定し、
+        台船・引船・揚錨船・潜水士船の規格は上表の振動工法の表をそのまま再利用する
+        (原文注記「台船および引船の規格は、鋼矢板・鋼管矢板〈鋼杭〉海上運搬の規格とする」により同一表と確認済み)。
+        ただし<strong>引船と潜水士船は「現場条件による追加船団」</strong>であり、引船は杭打船の移動が
+        必要な場合(注1)、潜水士船は調査作業が伴う場合(注2)のみ、それぞれ独立した質問で計上を決める。
+      </p>
+      <div class="tw">
+        <table>
+          <thead>
+            <tr><th>ハンマ規格</th><th>クローラ式杭打機(陸上)</th><th>杭打船(海上)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>4〜4.5 t</td><td>4〜4.5 t</td><td>H-65</td></tr>
+            <tr><td>6.5 t</td><td>6.5〜8 t</td><td>H-65</td></tr>
+            <tr><td>7〜8 t</td><td>6.5〜8 t</td><td>H-125</td></tr>
+            <tr><td>10〜12.5 t</td><td>10〜12.5 t</td><td>H-125</td></tr>
+            <tr><td>15.0 t</td><td class="dash">−(陸上打設の表に行なし。別途検討)</td><td>H-150</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">
+        この対応表は原文のセル結合位置(「6.5〜8 t」は縦結合セル、H-65/H-125 は 2 行にまたがる結合)
+        から読み取ったもので、信頼度は <span class="pill crit">推定</span>。
+        境界の最終確認は原本の表で行うこと(注意節も参照)。
+        ハンマ規格決定表自体は移植元 007 由来の <code>FrontWall.DriveEstimate</code> にあるが、
+        同ファイルは <code>scripts/port-from-legacy.sh</code> が 007 と完全同期させる対象のため、
+        杭打機・杭打船選定は新規 <code>FrontWall.DriveEquipment</code> に実装した
+        (控え杭側の <code>AnchorDriveEstimate</code> と同じ、既存ファイルを直接改変しない回避パターン)。
+      </p>
+
       <h3>算出値には信頼度を付す</h3>
       <p>
         出典のある式で求まるものを <span class="pill ok">確定</span>、
@@ -831,13 +868,13 @@
 
       <h3>共通仕様</h3>
       <ul class="plain">
-        <li>ノード検索で <code>SpqwNodes.</code> と入力すると 3 ノードが表示される。各引数がそのまま入力ポートになる</li>
+        <li>ノード検索で <code>SpqwNodes.</code> と入力すると 7 ノードが表示される(断面性能・数量集計・柱状図解析・打設歩掛 4 系統)。各引数がそのまま入力ポートになる</li>
         <li>未配線の入力ポートは<strong>デフォルト値で実行される</strong>。既定値のまま出力を確かめてから実データに置き換えられる(例外: <code>CalcWeightedN</code> はファイルパス必須)</li>
         <li>出力は <code>[MultiReturn]</code> の辞書で、日本語の辞書キーがそのまま出力ポート名になる。必要な項目だけ下流へ配線すればよい</li>
         <li>入力にリストを渡すと 1 要素ずつ自動で呼び出される(list-level 自動反復。下の例 1)</li>
         <li>入力は実務の呼び径慣行に合わせ mm 呼称(<code>D_mm</code> 等)で受け、ノード内部で直ちに m へ変換する。内部計算はすべて m</li>
         <li>入力不正はすべて <code>ArgumentException</code> を投げてノードを警告状態にする。不正値のまま計算は続けない</li>
-        <li>打設歩掛(3 工法)のノードとジオメトリ生成ノードは未実装(後者は AutoCAD のトランザクションを伴い実機でしか検証できないため)</li>
+        <li>打設歩掛積算も 4 ノード(<code>CalcFrontWallDriveEstimate</code> / <code>CalcVibroEstimate</code> / <code>CalcVibroJetEstimate</code> / <code>CalcAnchorPileDriveEstimate</code>)としてノード化済み。対応する AutoCAD コマンドの対話フローを移植し、XData 由来の値は明示引数で受ける(詳細は README §4.5〜4.8)。ジオメトリ生成ノードのみ未実装(AutoCAD のトランザクションを伴い実機でしか検証できないため)</li>
       </ul>
 
       <h3><code>CalcSection</code> — 前壁鋼管矢板の断面性能</h3>
@@ -1115,13 +1152,13 @@
       <h2>Core と Plugin を分ける</h2>
       <p>
         計算層(Core)は AutoCAD に依存せず BCL のみを参照するため、WSL / Linux 上で
-        <strong>585 件のテストがそのまま走る</strong>。AutoCAD に依存するのは図形生成・XData・
+        <strong>603 件のテストがそのまま走る</strong>。AutoCAD に依存するのは図形生成・XData・
         コマンド定義だけで、こちらはスタブとリンクして構文・型検証まで行う。
       </p>
 
       <pre class="code">009_sheet-pile-quaywall/
 ├── src/SheetPileQuayWall.Core/     <i>AutoCAD 非依存(BCL のみ)</i>
-│   ├── FrontWall/                  <i>断面性能・継手・打設歩掛 3 工法</i>
+│   ├── FrontWall/                  <i>断面性能・継手・打設歩掛 3 工法・杭打機/杭打船選定</i>
 │   ├── TieRod/                     <i>タイロッド計算・配置</i>
 │   ├── AnchorPile/                 <i>控え杭の整列計算・打撃工法(4節3-4.6)</i>
 │   ├── Import/                     <i>帳票 CSV 取り込み</i>
@@ -1131,7 +1168,7 @@
 └── src/SheetPileQuayWall.Plugin/   <i>AutoCAD 依存</i>
     ├── Commands/                   <i>SPQW_* 19 コマンド</i>
     ├── XData/                      <i>キー=値 + 1011 併記</i>
-    └── Dynamo/SpqwNodes.cs         <i>Zero Touch Node 3 個</i></pre>
+    └── Dynamo/SpqwNodes.cs         <i>Zero Touch Node 7 個</i></pre>
 
       <h3>守っている規約</h3>
       <ul class="plain">
@@ -1179,6 +1216,12 @@
         </p>
         <p>
           このほか、施工規模区分 E3 の係数表も崩れており、打撃工法と同じ「50 本未満 −0.05」と解釈して実装している。
+        </p>
+        <p>
+          打撃工法(前壁 3-4.5 / 控え杭 3-4.6)の<strong>杭打機・杭打船選定表</strong>も同様にセル結合で崩れているが、
+          結合位置から対応を読み取って実装した。クローラ式杭打機は 3 ランク(4〜4.5t / 6.5〜8t / 10〜12.5t。
+          <strong>ハンマ 15.0t は陸上打設の表に行が無く表外</strong>)、杭打船は H-65 / H-125 / H-150。
+          いずれも信頼度 <span class="pill crit">推定</span> であり、<strong>境界の最終確認は原本の表で行うこと。</strong>
         </p>
       </div>
 
@@ -1257,7 +1300,7 @@
     <div class="body">
       <h2>Core は AutoCAD なしで検証できる</h2>
 
-      <pre class="code"><i># Core + テスト(AutoCAD 不要。585 件が green であること)</i>
+      <pre class="code"><i># Core + テスト(AutoCAD 不要。603 件が green であること)</i>
 dotnet test tests/SheetPileQuayWall.Core.Tests -c Release
 
 <i># Plugin の構文検証(AutoCAD 不要。スタブとリンクする。配布不可)</i>
@@ -1280,7 +1323,7 @@ dotnet build src/SheetPileQuayWall.Plugin/SheetPileQuayWall.Plugin.csproj -c Rel
   <footer class="colophon">
     <span>009_sheet-pile-quaywall</span>
     <span>19 commands</span>
-    <span>585 tests green</span>
+    <span>603 tests green</span>
     <span>AutoCAD 2025 / Civil 3D 2025</span>
     <span>.NET 8.0 · net8.0-windows · x64</span>
   </footer>

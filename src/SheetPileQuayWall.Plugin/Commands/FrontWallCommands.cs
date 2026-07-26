@@ -231,6 +231,44 @@ namespace SheetPileQuayWall.Plugin.Commands
                 ? SheetPileQuayWall.Core.FrontWall.ObstacleStatus.Exists
                 : SheetPileQuayWall.Core.FrontWall.ObstacleStatus.None;
 
+            // ── 作業船・機械(3-4.5-14〜15)─────────────────────────────
+            // 引船・潜水士船は「現場条件による追加船団」であり、それぞれ杭打船の移動の
+            // 要否(注1)・調査作業の有無(注2)で計上を判断する。
+            bool needCrawlerCrane = false;
+            bool needTugBoat = false;
+            bool needDiverVessel = false;
+            if (site == SheetPileQuayWall.Core.FrontWall.ConstructionSite.Onshore)
+            {
+                string craneText;
+                if (!SheetPileQuayWall.Plugin.Prompt.TryAskKeyword(
+                    ed, "\nクローラクレーン (小運搬用) [計上しない(N)/計上する(Y)] <N>: ",
+                    new string[] { "N", "Y" }, "N", out craneText))
+                {
+                    return;
+                }
+                needCrawlerCrane = craneText == "Y";
+            }
+            else
+            {
+                string tugText;
+                if (!SheetPileQuayWall.Plugin.Prompt.TryAskKeyword(
+                    ed, "\n引船 (現場条件により杭打船の移動が必要な場合) [計上しない(N)/計上する(Y)] <N>: ",
+                    new string[] { "N", "Y" }, "N", out tugText))
+                {
+                    return;
+                }
+                needTugBoat = tugText == "Y";
+
+                string diverText;
+                if (!SheetPileQuayWall.Plugin.Prompt.TryAskKeyword(
+                    ed, "\n潜水士船 (打設個所の障害物・打設後異常の調査作業) [計上しない(N)/計上する(Y)] <N>: ",
+                    new string[] { "N", "Y" }, "N", out diverText))
+                {
+                    return;
+                }
+                needDiverVessel = diverText == "Y";
+            }
+
             // ── 積算(移植元 007 SPSP_Estimate と同じ手順)──────────────
             int D_mm = (int)System.Math.Round(record.OuterDm * 1000.0);
             int t_mm = (int)System.Math.Round(record.WallTm * 1000.0);
@@ -254,6 +292,11 @@ namespace SheetPileQuayWall.Plugin.Commands
             double Tc = Tp + Tb + Tw;
             double Q = SheetPileQuayWall.Core.FrontWall.DriveEstimate.CalcQ(
                 site, Tc, sea, obstacle, pileCount);
+            if (Q <= 0.0)
+            {
+                ed.WriteMessage("\nエラー: 1 日当り打設本数が 0 以下になりました。入力条件を確認してください。");
+                return;
+            }
 
             int driveDays = (int)System.Math.Ceiling(pileCount / Q);
             var labor = SheetPileQuayWall.Core.FrontWall.DriveEstimate.GetLabor(
@@ -275,6 +318,62 @@ namespace SheetPileQuayWall.Plugin.Commands
             ed.WriteMessage("\n--- 貫入抵抗値・ハンマ規格 ---");
             ed.WriteMessage($"\n  貫入抵抗値 R: {R,10:F1} kN");
             ed.WriteMessage($"\n  推奨ハンマ  :  {hammer}");
+
+            ed.WriteMessage("\n--- 作業船・機械 (3-4.5-14〜15。杭打機規格・杭打船規格は[推定]、原本確認を推奨) ---");
+            if (site == SheetPileQuayWall.Core.FrontWall.ConstructionSite.Onshore)
+            {
+                string crawlerDriver =
+                    SheetPileQuayWall.Core.FrontWall.DriveEquipment.GetCrawlerDriver(hammer);
+                ed.WriteMessage(crawlerDriver.Length == 0
+                    ? "\n  クローラ式杭打機: 規格表の範囲外です。基準の規格決定図を超えるため別途検討してください。"
+                    : $"\n  クローラ式杭打機: {crawlerDriver}");
+                if (needCrawlerCrane)
+                {
+                    ed.WriteMessage(
+                        $"\n  クローラクレーン: {SheetPileQuayWall.Core.FrontWall.DriveEquipment.CrawlerCraneSpec}" +
+                        " (小運搬用、必要に応じて計上)");
+                }
+            }
+            else
+            {
+                string pileDriverVessel =
+                    SheetPileQuayWall.Core.FrontWall.DriveEquipment.GetPileDriverVessel(hammer);
+                ed.WriteMessage(pileDriverVessel.Length == 0
+                    ? "\n  杭打船          : 規格表の範囲外です。基準の規格決定図を超えるため別途検討してください。"
+                    : $"\n  杭打船          : {pileDriverVessel}");
+
+                var (barge, tug) = SheetPileQuayWall.Core.FrontWall.VibroEstimate.GetBargeAndTug(
+                    record.LengthM);
+                if (barge.Length == 0)
+                {
+                    ed.WriteMessage(
+                        $"\n  台船・引船      : 全長 {record.LengthM:F1}m は規格表の範囲" +
+                        $"(44m未満)を超えています。別途選定してください。");
+                }
+                else
+                {
+                    ed.WriteMessage($"\n  台船            : {barge} × 1");
+                    // 引船は「現場条件による追加船団」— 杭打船の移動が必要な場合のみ計上
+                    // (3-4.5-15 注1)。規格は台船とペアで決まる。
+                    if (needTugBoat)
+                    {
+                        ed.WriteMessage($"\n  引船            : {tug} × 1 (杭打船の移動用に計上)");
+                    }
+                    else
+                    {
+                        ed.WriteMessage("\n  引船            : 計上しない (杭打船の移動が不要な場合)");
+                    }
+                }
+                ed.WriteMessage(
+                    $"\n  揚錨船          : {SheetPileQuayWall.Core.FrontWall.VibroEstimate.AnchorHandlingVesselSpec} × 1");
+                if (needDiverVessel)
+                {
+                    ed.WriteMessage(
+                        $"\n  潜水士船        : {SheetPileQuayWall.Core.FrontWall.VibroEstimate.DiverVesselSpec} × 1" +
+                        " (必要に応じて計上)");
+                }
+            }
+
             ed.WriteMessage("\n--- 施工能力 (打設) ---");
             ed.WriteMessage($"\n  打撃速度 Sb : {Sb,8:F2} m/分");
             ed.WriteMessage($"\n  準備時間 Tp : {Tp,8:F1} 分/本");

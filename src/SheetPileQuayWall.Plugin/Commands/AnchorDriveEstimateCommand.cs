@@ -117,6 +117,15 @@ namespace SheetPileQuayWall.Plugin.Commands
                 ? SheetPileQuayWall.Core.FrontWall.ObstacleStatus.Exists
                 : SheetPileQuayWall.Core.FrontWall.ObstacleStatus.None;
 
+            string craneText;
+            if (!SheetPileQuayWall.Plugin.Prompt.TryAskKeyword(
+                ed, "\nクローラクレーン (小運搬用) [計上しない(N)/計上する(Y)] <N>: ",
+                new string[] { "N", "Y" }, "N", out craneText))
+            {
+                return;
+            }
+            bool needCrawlerCrane = craneText == "Y";
+
             // ── 鋼材質量(本管のみ。控え杭は継手を持たない単独杭)──────────
             double W_kgPerM = SheetPileQuayWall.Core.FrontWall.SectionProperties.CalcW(
                 a.OuterDm, a.WallTm);
@@ -177,6 +186,19 @@ namespace SheetPileQuayWall.Plugin.Commands
             ed.WriteMessage("\n--- 貫入抵抗値・ハンマ規格 (3-4.6-12) ---");
             ed.WriteMessage($"\n  貫入抵抗値 R: {R,10:F1} kN");
             ed.WriteMessage($"\n  推奨ハンマ  :  {hammer}");
+
+            ed.WriteMessage("\n--- 作業船・機械 (3-4.6-12。杭打機規格は[推定]、原本確認を推奨) ---");
+            string crawlerDriver =
+                SheetPileQuayWall.Core.FrontWall.DriveEquipment.GetCrawlerDriver(hammer);
+            ed.WriteMessage(crawlerDriver.Length == 0
+                ? "\n  クローラ式杭打機: 規格表の範囲外です。基準の規格決定図を超えるため別途検討してください。"
+                : $"\n  クローラ式杭打機: {crawlerDriver}");
+            if (needCrawlerCrane)
+            {
+                ed.WriteMessage(
+                    $"\n  クローラクレーン: {SheetPileQuayWall.Core.FrontWall.DriveEquipment.CrawlerCraneSpec}" +
+                    " (小運搬用、必要に応じて計上)");
+            }
 
             ed.WriteMessage("\n--- 施工能力 (打設、3-4.6-13〜14) ---");
             ed.WriteMessage($"\n  打撃速度 Sb : {Sb,8:F2} m/分");

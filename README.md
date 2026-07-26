@@ -3,7 +3,7 @@
 **鋼管矢板式岸壁**(前壁鋼管矢板 + タイロッド + 控え杭)を、単一の DLL で完結してパラメトリック 3D モデル生成・積算(施工歩掛計算)できる AutoCAD 2025 / Civil 3D 2025 プラグイン。
 
 - ターゲット: C# / .NET 8.0、`net8.0-windows`、x64、AutoCAD 2025 .NET / Civil 3D 2025 / Dynamo 3.3(Zero Touch Node)
-- 構成: **Core(AutoCAD 非依存の計算層)/ Plugin(AutoCAD 依存層)** の 2 プロジェクト分割。Core は BCL のみを参照し、WSL / Linux でもテストできる(**xUnit 585 ケース green**)
+- 構成: **Core(AutoCAD 非依存の計算層)/ Plugin(AutoCAD 依存層)** の 2 プロジェクト分割。Core は BCL のみを参照し、WSL / Linux でもテストできる(**xUnit 603 ケース green**)
 - `006_steel-pipe-pile` / `007_steel-pipe-sheet-pile` / `008_tairod` の後継・統合版であり、**009 単独でビルド・実行できる**(3 リポジトリへのプロジェクト参照・アセンブリ参照は持たない)
 
 > **使用前に §9「注意点・既知の課題」を必ず読むこと。**実機動作は未検証であり、積算基準の一部に OCR から復元できなかった表がある。
@@ -97,7 +97,7 @@
 | `SPQW_FRONTWALL_Create` | 対話入力 → Solid3d 生成(実形状継手 + 傾斜角対応)→ XData 記録 |
 | `SPQW_FRONTWALL_Action` | 既存選択 → 諸元再入力 → 同位置に再生成(**MOVE 後は移動先に追随**) |
 | `SPQW_FRONTWALL_Query` | 諸元・断面性能(K011)・継手要否・質量を出力 |
-| `SPQW_FRONTWALL_Estimate` | **打撃工法**の打設歩掛積算(4節 3-4.5) |
+| `SPQW_FRONTWALL_Estimate` | **打撃工法**の打設歩掛積算(4節 3-4.5。杭打機/杭打船・付帯船舶を含む) |
 | `SPQW_FRONTWALL_VibroEstimate` | **振動工法・バイブロ単独**の打設歩掛積算(16節 3-2、海上打設のみ) |
 | `SPQW_FRONTWALL_VibroJetEstimate` | **振動工法・ジェット併用**の打設歩掛積算(16節 3-1、陸上/海上とも) |
 
@@ -117,7 +117,7 @@
 | `SPQW_ANCHORPILE_Create` | **前壁選択** → タイロッド軸線に整列した控え杭を生成 |
 | `SPQW_ANCHORPILE_Action` | 前壁基準の整列位置に再生成(MOVE していても整列位置へ戻る) |
 | `SPQW_ANCHORPILE_Query` | 諸元・整列座標・杭面間浄距離・積算数量(1 本あたり)を出力 |
-| `SPQW_ANCHORPILE_Estimate` | **打撃工法**の打設歩掛積算(4節 3-4.6、**陸上打設のみ**) |
+| `SPQW_ANCHORPILE_Estimate` | **打撃工法**の打設歩掛積算(4節 3-4.6、**陸上打設のみ**。クローラ式杭打機/クローラクレーンを含む) |
 
 ### 施設全体
 
@@ -172,6 +172,8 @@
 
 **控え杭は前壁と節が違う**。控え杭は継手を持たない単独の鋼管杭であるため、`SPQW_ANCHORPILE_Estimate` は 4節 3-4.5(鋼矢板式)ではなく **4節 3-4.6(鋼杭式)** に基づく。実データ突き合わせの結果、貫入抵抗値 R・ハンマ規格決定図・打撃速度 Sb 表・溶接時間表・準備時間 Tp・基準作業能力係数は両節で数値まで完全一致するため共有実装(`FrontWall.DriveEstimate`)を再利用しているが、**1 本当り打撃時間 Tb の係数 K は異なる**。3-4.5 は「直杭 K=1.0」のみを定義するのに対し 3-4.6 は「直杭 K=1.0・斜杭 K=1.2」を明記しており、控え杭は傾斜角 `InclDeg` を持つため斜杭補正が必須になる(`AnchorPile.AnchorDriveEstimate` に新規実装)。本コマンドは**陸上打設のみ**(3-4.6 の海上打設は未実装)。
 
+**打撃工法の杭打機・杭打船**(3-4.5-14〜15 / 3-4.6-12〜13「作業船・機械の選定」)。前壁・控え杭ともハンマ規格から陸上打設は「クローラ式杭打機」+ 条件該当時のみ計上する「クローラクレーン(小運搬用、固定50t吊)」を、海上打設(前壁のみ)は「杭打船」(H-65/H-125/H-150)+ 台船・引船・揚錨船・潜水士船(振動工法 16節3-2 と同一表を再利用)を選定する。ハンマ規格決定表自体は移植元 007 の `FrontWall.DriveEstimate` にあるが、`port-from-legacy.sh` が 007 と完全同期させるファイルのため杭打機・杭打船選定は新規 `FrontWall.DriveEquipment` に実装した(控え杭側の `AnchorDriveEstimate` と同じ回避パターン)。杭打機・杭打船のランク境界は原文表のセル結合によるOCR崩れのため**信頼度:推定**(§9.1 参照)。
+
 ### XData 設計
 
 | 部材 | RegApp 名 | 主なキー |
@@ -189,17 +191,18 @@
 
 ## 4. Dynamo ノード
 
-Civil 3D 2025 同梱の Dynamo 3.3 で使う Zero Touch Node。全 **3 ノード**。
+Civil 3D 2025 同梱の Dynamo 3.3 で使う Zero Touch Node。全 **7 ノード**。
 
 ### 4.1 共通仕様
 
-- **カテゴリ**: ノード検索で `SpqwNodes.` と入力すると `SheetPileQuayWall.Plugin > Dynamo` 配下に 3 ノードが表示される。
+- **カテゴリ**: ノード検索で `SpqwNodes.` と入力すると `SheetPileQuayWall.Plugin > Dynamo` 配下に 7 ノードが表示される。
 - **入力**: メソッドの各引数がそのまま入力ポートになる。`Number` / `String` / `Boolean` / `Code Block` ノードから配線する。**未配線のポートはデフォルト値で実行される**ため、既定値のまま出力を確かめてから実データに置き換えられる(例外: `CalcWeightedN` はファイルパス必須のため既定値では例外)。
 - **出力**: 戻り値は `[MultiReturn]` の辞書で、**日本語の辞書キーがそのまま出力ポート名**になる(CLAUDE.PRIVATE.md §2.1)。必要な項目だけを下流(`Watch` / `Data.ExportToCSV` / `Excel.WriteToFile` 等)へ配線すればよい。
-- **list-level 自動反復**: 入力に単一値の代わりにリストを渡すと、Dynamo が 1 要素ずつ自動で関数を呼び出し、結果をリストで返す(§4.5 の例 1)。
+- **list-level 自動反復**: 入力に単一値の代わりにリストを渡すと、Dynamo が 1 要素ずつ自動で関数を呼び出し、結果をリストで返す(§4.9 の例 1)。
 - **単位の境界**: 入力は実務の呼び径慣行に合わせ mm 呼称(`D_mm` 等)で受け、ノード内部で直ちに m へ変換する(決定 7)。内部計算・Core 層はすべて m。
-- **エラー動作**: 入力不正はすべて `ArgumentException` を投げてノードを警告状態(黄色)にする。不正値のまま計算を続けることはない。
-- ジオメトリを扱わない純計算のため `ProtoGeometry.dll` は参照しない。ジオメトリ生成ノード(007 `SpspNodes.CreateSolid` 相当)は AutoCAD のトランザクションを伴い実機でしか検証できないため移植していない(docs §12 項目 3 の決定)。**打設歩掛(3 工法)の Dynamo ノードも未実装**(§9.2)。
+- **エラー動作**: 入力不正・基準の規格表範囲外はすべて `ArgumentException` を投げてノードを警告状態(黄色)にする。不正値のまま計算を続けることはない。打設歩掛系の 4 ノード(§4.5〜4.8)は、対応する AutoCAD コマンドが「エラーメッセージを表示して中断」する箇所を、この規約に合わせて例外に置き換えている。
+- **XData を経由しない**: AutoCAD コマンドが選択済みエンティティの XData から読む値(外径・肉厚・全長・傾斜角など)は、ノードでは明示的な引数として受け取る。
+- ジオメトリを扱わない純計算のため `ProtoGeometry.dll` は参照しない。ジオメトリ生成ノード(007 `SpspNodes.CreateSolid` 相当)は AutoCAD のトランザクションを伴い実機でしか検証できないため移植していない(docs §12 項目 3 の決定)。
 
 ### 4.2 `SpqwNodes.CalcSection` — 前壁鋼管矢板の断面性能
 
@@ -334,7 +337,158 @@ Civil 3D 2025 同梱の Dynamo 3.3 で使う Zero Touch Node。全 **3 ノード
 - **行に 1 件でも不備があれば例外を投げて計算全体を止める**(「◯行目: 内容」を `; ` で連結した集約メッセージ)。帳票 CSV 取り込みコマンドの「1 行の不備で全体を止めない」方針とは逆で、部分的な値のまま地盤条件の計算を進めると設計判断を誤るため、あえて全件成功を必須にしている。
 - 算出した値は、対応する AutoCAD コマンドの「加重平均N値」欄へ**手入力で転記**する(自動連携は無い)。
 
-### 4.5 グラフ配線例(推奨ノード例)
+### 4.5 `SpqwNodes.CalcFrontWallDriveEstimate` — 前壁・打撃工法の打設歩掛積算
+
+`SPQW_FRONTWALL_Estimate`(4節 3-4.5)の対話フローを 1:1 で移植。杭打機・杭打船・付帯船舶(§3「打撃工法の杭打機・杭打船」)を含む。
+
+```
+ [Number]  D_mm/t_mm/L_m ────────┐
+ [Boolean] isOffshore ───────────┤
+ [Number]  penetration_m ────────┤
+ [Number]  pileCount ────────────┤── SpqwNodes ──┬── 貫入抵抗値 R [kN]
+ [Number]  nTip/nAvg ────────────┤ .CalcFrontWall├── 推奨ハンマ
+ [Number]  jointCountPerPile ────┤  DriveEstimate├── 打設時間 Tc [分/本]
+ [Boolean] isSevereSea ──────────┤               ├── 日当り打設 Q [本/日]
+ [Boolean] hasObstacle ──────────┤               ├── 世話役/とび工/普通作業員/溶接工
+ [Boolean] needCrawlerCrane ─────┤               └── クローラ式杭打機/杭打船/台船/引船/
+ [Boolean] needTugBoat ──────────┤                   揚錨船/潜水士船 …ほか(23 ポート)
+ [Boolean] needDiverVessel ──────┘
+```
+
+**入力**
+
+| 英語名 | 日本語名 | 単位 | デフォルト値 | 範囲 |
+|---|---|---|---|---|
+| `D_mm` / `t_mm` / `L_m` | 外径 / 肉厚 / 全長 | mm / mm / m | 800.0 / 12.0 / 20.0 | チェックなし(選択済み前壁の XData に相当する値を渡す想定) |
+| `isOffshore` | 施工区分(海上か) | − | `true` | `true`=海上 / `false`=陸上 |
+| `penetration_m` | 根入れ長 | m | 10.0 | チェックなし |
+| `pileCount` | 打設本数 | 本 | 10 | チェックなし |
+| `nTip` / `nAvg` | 先端 N 値 / 加重平均 N 値 | − | 50 / 20 | チェックなし |
+| `jointCountPerPile` | 継杭の継手個所数 | 箇所 | 0 | チェックなし |
+| `isSevereSea` | 海象が悪いか(海上のみ有効) | − | `false` | − |
+| `hasObstacle` | 障害の有無 | − | `false` | − |
+| `needCrawlerCrane` | クローラクレーンの計上(陸上のみ有効) | − | `false` | − |
+| `needTugBoat` | 引船の計上(海上のみ有効。現場条件により杭打船の移動が必要な場合。3-4.5-15 注1) | − | `false` | − |
+| `needDiverVessel` | 潜水士船の計上(海上のみ有効) | − | `false` | − |
+
+**出力**(23 ポート): 単位重量 W [kg/m]・1本当り質量 [kg]・合計質量 [t]・貫入抵抗値 R [kN]・推奨ハンマ・クローラ式杭打機・クローラクレーン・杭打船・台船・引船・揚錨船・潜水士船・打撃速度 Sb [m/分]・準備時間 Tp・打撃時間 Tb・溶接時間 Tw・打設時間 Tc(いずれも分/本)・日当り打設 Q [本/日]・打設日数 [日]・世話役/とび工/普通作業員/溶接工。陸上時は杭打船・台船・引船・揚錨船・潜水士船が空文字、海上時はクローラ式杭打機・クローラクレーンが空文字になる。引船は `needTugBoat`、潜水士船は `needDiverVessel` が `true` のときのみ規格を返す(「現場条件による追加船団」のため)。1 日当り打設本数が 0 以下になる入力条件は例外。
+
+### 4.6 `SpqwNodes.CalcVibroEstimate` — 前壁・振動工法(バイブロ単独)の打設歩掛積算
+
+`SPQW_FRONTWALL_VibroEstimate`(16節 3-2、海上打設のみ)の対話フローを 1:1 で移植。
+
+```
+ [Number]  D_mm/t_mm/L_m ────────┐
+ [String]  jointType ────────────┤
+ [Number]  pieceIndex/pieceCount ┤
+ [Number]  driveLength_m ────────┤── SpqwNodes.CalcVibroEstimate ──┬── バイブロハンマ規格
+ [Number]  pileCount ────────────┤                                 ├── 起重機船・杭打船
+ [Number]  nTip/nAvg ────────────┤                                 ├── 台船/引船/揚錨船/潜水士船
+ [Number]  jointCountPerPile ────┤                                 ├── 打設時間 Tc [分/本]
+ [Boolean] isSevereSea ──────────┤                                 ├── 日当り打設 Q [本/日]
+ [Boolean] hasObstacle ──────────┤                                 └── 世話役/とび工/普通作業員/
+ [Boolean] needDiverVessel ──────┘                                    特殊作業員/溶接工 …(26 ポート)
+```
+
+**入力**
+
+| 英語名 | 日本語名 | 単位 | デフォルト値 | 範囲 |
+|---|---|---|---|---|
+| `D_mm` / `t_mm` / `L_m` | 外径 / 肉厚 / 全長 | mm / mm / m | 800.0 / 12.0 / 20.0 | チェックなし |
+| `jointType` | 継手形式 | − | `"LT75"` | `LT65`/`LT75`/`LT100`/`PP`/`PT`(不明コードは例外) |
+| `pieceIndex` / `pieceCount` | 施工順位 / 総本数(継手金物質量の算定用) | − | 1 / 10 | `PieceAssignment.Validate` で検証(範囲外は例外) |
+| `driveLength_m` | 打設長 Lb(表層の連続 N=0 区間は除く) | m | 20.0 | チェックなし |
+| `pileCount` | 打設本数 | 本 | 10 | チェックなし |
+| `nTip` / `nAvg` | 先端地盤 N 値 / 周辺地盤の加重平均 N 値 | − | 50 / 20 | チェックなし |
+| `jointCountPerPile` | 継杭の継手個所数 | 箇所 | 0 | チェックなし |
+| `isSevereSea` | 海象が悪いか | − | `false` | − |
+| `hasObstacle` | 障害の有無 | − | `false` | − |
+| `needDiverVessel` | 潜水士船の計上(`hasObstacle` とは別の判断軸) | − | `false` | − |
+
+**出力**(26 ポート): 本管質量 [kg]・継手金物質量 [kg]・1本当り合計質量 [t]・本管貫入抵抗 R1・継手貫入抵抗 Rj・合計貫入抵抗 R(いずれも kN)・バイブロハンマ規格・発動発電機・起重機船・杭打船・継手溶接機械台数・継手溶接発電機・台船・引船・揚錨船・潜水士船・準備時間 Tp・打込時間 Tb・溶接時間 Tw・打設時間 Tc(分/本)・日当り打設 Q [本/日]・打設日数 [日]・世話役/とび工/普通作業員/特殊作業員/溶接工。
+
+### 4.7 `SpqwNodes.CalcVibroJetEstimate` — 前壁・振動工法(ジェット併用)の打設歩掛積算
+
+`SPQW_FRONTWALL_VibroJetEstimate`(16節 3-1、陸上/海上とも)の対話フローを 1:1 で移植。7 ノード中もっとも入力が多い(26 個)。
+
+```
+ [Number]  D_mm/t_mm/L_m/jointType/pieceIndex/pieceCount ─┐
+ [Boolean] isOffshore ─────────────────────────────────────┤
+ [Number]  operatingHours(陸上のみ) ────────────────────────┤
+ [Number]  driveLength_m/liftLength_m/liftCount/pileCount ─┤
+ [String]  soilType ────────────────────────────────────────┤── SpqwNodes ──┬── バイブロハンマ規格
+ [Number]  nAvg/maxCobble_mm(玉石のみ)/qu(岩盤のみ) ─────────┤ .CalcVibroJet ├── 必要偏心モーメント K0
+ [Boolean] hasChuck ────────────────────────────────────────┤  Estimate     ├── クレーン吊上げ荷重 Cf
+ [Number]  jointLength_m/jetCount/nozzleCount ──────────────┤               ├── 打設時間 Tc [分/本]
+ [Boolean] needWaterSupply ──────────────────────────────────┤               ├── 日当り打設 Q [本/日]
+ [Number]  jointCountPerPile ─────────────────────────────────┤               └── 世話役/とび工/…
+ [Boolean] isSevereSea/hasObstacle/needDiverVessel ──────────┤                  (36 ポート)
+ [Number]  vibroMass_t ──────────────────────────────────────┘
+```
+
+**入力**(26 個。既定値は `SPQW_FRONTWALL_VibroJetEstimate` のプロンプト既定値と同じ)
+
+| 英語名 | 日本語名 | 単位 | デフォルト値 | 範囲 |
+|---|---|---|---|---|
+| `D_mm` / `t_mm` / `L_m` | 外径 / 肉厚 / 全長 | mm / mm / m | 800.0 / 12.0 / 20.0 | `ValidateJetApplicability`: D≦1,500mm・L≦40m を超えると例外(3-1-3 注3) |
+| `jointType` | 継手形式 | − | `"LT75"` | 5 種(不明コードは例外) |
+| `pieceIndex` / `pieceCount` | 施工順位 / 総本数 | − | 1 / 10 | `PieceAssignment.Validate` で検証 |
+| `isOffshore` | 施工区分(海上か) | − | `true` | − |
+| `operatingHours` | クローラクレーンの運転時間 T(陸上のみ有効。海上は 6h/日固定) | h/日 | 8.0 | チェックなし |
+| `driveLength_m` | 打込長 ℓ | m | 20.0 | チェックなし |
+| `liftLength_m` | 吊込 1 回ごとの杭長 L0 | m | 20.0 | チェックなし |
+| `liftCount` | 杭の吊込み回数 ns | 回 | 1 | チェックなし |
+| `pileCount` | 打設本数 | 本 | 10 | チェックなし |
+| `soilType` | 土質 | − | `"SG"` | `SG`(砂質土等)/`CL`(粘性土)/`CG`(玉石混りレキ)/`CE`(固結土)/`RK`(岩盤) |
+| `nAvg` | 加重平均 N 値 | − | 30 | 土質と N 値の組合せが基本振幅係数表(3-16-15)に無いと例外 |
+| `maxCobble_mm` | 最大玉石径(`soilType="CG"` のみ使用) | mm | 100.0 | 200mm 超は例外(η未定義) |
+| `qu` | 加重平均一軸圧縮強度(`soilType="RK"` のみ使用) | N/mm² | 10.0 | 組合せが表に無いと例外 |
+| `hasChuck` | 鋼管チャックの装備 | − | `true` | `false` で A0 を 1.3 で除す |
+| `jointLength_m` | 継手の長さ ℓj(ε 算定用) | m | 20.0 | チェックなし |
+| `jetCount` | ジェット使用台数(基準 3-16-16 の表は要確認) | 台 | 2 | 1〜4(範囲外は例外) |
+| `nozzleCount` | 噴射ノズル数(基準 3-16-16 の表による) | 個 | 6 | チェックなし |
+| `needWaterSupply` | 水中ポンプ・水槽の計上 | − | `false` | − |
+| `jointCountPerPile` | 継杭の継手個所数 | 箇所 | 0 | チェックなし |
+| `isSevereSea` | 海象が悪いか(海上のみ有効) | − | `false` | − |
+| `hasObstacle` | 障害の有無 | − | `false` | − |
+| `needDiverVessel` | 潜水士船の計上(海上のみ有効) | − | `false` | − |
+| `vibroMass_t` | バイブロハンマ質量 Wv(鋼管チャック込み) | t | 10.0 | チェックなし |
+
+**出力**(36 ポート): 本管質量・継手金物質量・杭1本当り質量 Wp・基本振幅係数 A0・必要偏心モーメント K0・バイブロハンマ規格・発動発電機(バイブロ用)・クレーン吊上げ荷重 Cf・台船・引船・揚錨船・潜水士船・ジェット使用台数・噴射ノズル数(いずれも入力値のエコー)・発動発電機(ジェット用)・水中ポンプ関連 6 項目・γ/β/δ/ε・準備時間 Tp・打込時間 Tb・溶接時間 Tw・打設時間 Tc・日当り打設 Q・打設日数・世話役/とび工/普通作業員/特殊作業員/溶接工。陸上時は台船・引船・揚錨船・潜水士船が空文字。バイブロ規格・係数β・係数δがいずれも表の範囲外の場合はそれぞれ例外。
+
+### 4.8 `SpqwNodes.CalcAnchorPileDriveEstimate` — 控え杭・打撃工法の打設歩掛積算
+
+`SPQW_ANCHORPILE_Estimate`(4節 3-4.6、陸上打設のみ)の対話フローを 1:1 で移植。
+
+```
+ [Number]  D_mm/t_mm/L_m ────────┐
+ [Number]  inclDeg ──────────────┤
+ [Number]  penetration_m ────────┤── SpqwNodes ──┬── 貫入抵抗値 R [kN]
+ [Number]  pileCount ────────────┤ .CalcAnchorPile├── 推奨ハンマ
+ [Number]  nTip/nAvg ────────────┤  DriveEstimate ├── クローラ式杭打機/クローラクレーン
+ [Number]  jointCountPerPile ────┤               ├── 打設時間 Tc [分/本]
+ [Boolean] hasObstacle ──────────┤               ├── 日当り打設 Q [本/日]
+ [Boolean] needCrawlerCrane ─────┘               └── 世話役/とび工/普通作業員/溶接工(18 ポート)
+```
+
+**入力**
+
+| 英語名 | 日本語名 | 単位 | デフォルト値 | 範囲 |
+|---|---|---|---|---|
+| `D_mm` / `t_mm` / `L_m` | 外径 / 肉厚 / 全長 | mm / mm / m | 800.0 / 12.0 / 20.0 | チェックなし |
+| `inclDeg` | 傾斜角 θ(斜杭判定。`AnchorDriveEstimate.InclinationTolerance_deg` 超で斜杭 K=1.2) | deg | 0.0 | チェックなし |
+| `penetration_m` | 根入れ長 | m | 10.0 | チェックなし |
+| `pileCount` | 打設本数 | 本 | 1 | チェックなし |
+| `nTip` / `nAvg` | 先端 N 値 / 加重平均 N 値 | − | 50 / 20 | チェックなし |
+| `jointCountPerPile` | 継杭の継手個所数 | 箇所 | 0 | チェックなし |
+| `hasObstacle` | 障害の有無 | − | `false` | − |
+| `needCrawlerCrane` | クローラクレーンの計上 | − | `false` | − |
+
+**出力**(18 ポート): 単位重量 W [kg/m]・1本当り質量 [kg]・合計質量 [t]・貫入抵抗値 R [kN]・推奨ハンマ・クローラ式杭打機・クローラクレーン・打撃速度 Sb・準備時間 Tp・打撃時間 Tb・溶接時間 Tw・打設時間 Tc(分/本)・日当り打設 Q [本/日]・打設日数 [日]・世話役/とび工/普通作業員/溶接工。
+
+> **打設歩掛系 4 ノード(§4.5〜4.8)共通の注意**: 杭打機・杭打船のランク対応(`FrontWall.DriveEquipment`)は原文表のセル結合により信頼度**推定**(§9.1)。D/t/L 等の寸法は AutoCAD コマンドの「Estimate」系と同様に範囲チェックを行わない(選択済み XData を信頼する設計を、明示引数に置き換えても踏襲している)。算出根拠・端数処理・信頼度ラベルは §6.2〜6.5 の該当表を参照。
+
+### 4.9 グラフ配線例(推奨ノード例)
 
 いずれも Dynamo の標準機能(list-level 自動反復・既存の I/O ノード)との組合せだけで、`SpqwNodes` 側に特別な対応は要らない。この開発環境には Dynamo 実行系が無いため**グラフとしての動作は未検証**であり、数値は Core 層(`SectionProperties` / `QuayWallEstimate` / `BoringLogAnalysis`)を直接呼び出して算出した参考値である。
 
@@ -435,6 +589,9 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 | `jointCountPerPile` | 継杭の継手個所数 | 箇所 | 0 | 0〜5 |
 | `seaCondition` | 海象条件(海上のみ) | − | 普通 | 普通 / 悪い |
 | `obstacle` | 障害の有無 | − | なし | なし / あり |
+| `needCrawlerCrane` | クローラクレーン(小運搬用)の計上(陸上のみ) | − | しない | する / しない |
+| `needTugBoat` | 引船の計上(海上のみ。現場条件により杭打船の移動が必要な場合。3-4.5-15 注1) | − | しない | する / しない |
+| `needDiverVessel` | 潜水士船の計上(海上のみ、`obstacle` とは別の判断軸) | − | しない | する / しない |
 
 **振動工法・バイブロ単独(`SPQW_FRONTWALL_VibroEstimate`、16節 3-2)**
 
@@ -486,6 +643,7 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 | `nTip` / `nAvg` | 先端 N 値 / 加重平均 N 値 | − | 50 / 20 | 1〜100 |
 | `jointCountPerPile` | 継杭の継手個所数 | 箇所 | 0 | 0〜5 |
 | `obstacle` | 障害の有無 | − | なし | なし / あり |
+| `needCrawlerCrane` | クローラクレーン(小運搬用)の計上 | − | しない | する / しない |
 
 ### 5.3 タイロッド
 
@@ -631,6 +789,10 @@ CSV の行順は問わない(標高上端の降順に自動で並べ替えたう
 | 貫入抵抗値 R | 300·N·Ap + 2·N̄·L·As(3-4.5-14)。**継手項は無い** | 確定 |
 | ハンマ規格 | 鋼材質量と R の両方が収まる最小規格。4〜4.5t(4.56t/5,700kN)〜 15.0t(28.2t/35,100kN) | 確定 |
 | 打撃速度 Sb / 溶接時間 Tw / 打設時間 Tc / 日当り打設 Q / 労務編成 | 3-4.5-15〜17 | 確定 |
+| **クローラ式杭打機・クローラクレーン(陸上)** | ハンマ規格→3ランク(4〜4.5t / 6.5〜8t / 10〜12.5t)へ変換。**ハンマ15.0tは陸上打設の表に行が無く表外(別途検討)**。クローラクレーンは固定50t吊、条件該当時のみ計上(3-4.5-14) | **推定**(セル結合の読み取りによる。原本確認を推奨) |
+| **杭打船(海上)** | ハンマ規格5ランク→3ランク(H-65/H-125/H-150)へ変換(3-4.5-15) | **推定**(同上) |
+| **台船・揚錨船(海上)** | 16節3-2と同じ規格表を参照(3-4.5-15注3)。台船は杭長で選定、揚錨船は固定 | 確定 |
+| **引船・潜水士船(海上)** | 「現場条件による追加船団」— 引船は杭打船の移動が必要な場合(注1)、潜水士船は調査作業が伴う場合(注2)のみ計上。規格は引船=杭長ペア表・潜水士船=固定 | 確定 |
 
 ### 6.3 打設歩掛 — 振動工法・バイブロ単独(16節 3-2、海上打設のみ)
 
@@ -680,6 +842,7 @@ CSV の行順は問わない(標高上端の降順に自動で並べ替えたう
 | ハンマ規格・打撃速度 Sb・溶接時間 Tw・準備時間 Tp・ei/E1〜E3 | 4節 3-4.5 と数値まで完全一致するため共有実装を再利用 | 確定 |
 | **打撃時間 Tb** | **Tb = K × L ÷ Sb(小数1位切上げ)。K = 直杭 1.0 / 斜杭 1.2**(3-4.6-14)。4節 3-4.5 は斜杭の値を定義しないため独自実装(`AnchorPile.AnchorDriveEstimate`) | 確定 |
 | 労務編成 | 杭長 20m 境界でとび工 2→3 人・普通作業員 1→2 人(陸上打設、3-4.6-15) | 確定 |
+| **クローラ式杭打機・クローラクレーン** | 前壁と同じ選定(`FrontWall.DriveEquipment`。3-4.6-12) | **推定**(§6.2 と同じ理由) |
 
 ### 6.6 タイロッド
 
@@ -725,7 +888,7 @@ CSV の行順は問わない(標高上端の降順に自動で並べ替えたう
 Core 層は AutoCAD 非依存のため WSL / Linux でもビルド・テストできる。Plugin 層は AutoCAD が必要で、無い環境ではスタブで構文検証まで行う。
 
 ```bash
-# Core + テスト(AutoCAD 不要。585 件が green であること)
+# Core + テスト(AutoCAD 不要。603 件が green であること)
 dotnet test tests/SheetPileQuayWall.Core.Tests -c Release
 
 # Plugin の構文検証(AutoCAD 不要。スタブとリンクする。配布不可)
@@ -750,10 +913,11 @@ AutoCAD が既定パス以外にある場合は `-p:AcadRoot="..."` を指定す
 │   │   ├── Point3.cs / PileGeometry.cs / FrontWallRef.cs
 │   │   ├── CrossMemberValidator.cs      部材間整合チェック(§8 の 4 組)
 │   │   ├── QuayWallEstimate.cs          施設 1 件分の数量集計
-│   │   ├── FrontWall/                   007 移植 8 + 新規 5
+│   │   ├── FrontWall/                   007 移植 8 + 新規 6
 │   │   │                                 PieceAssignment / FrontWallPlacement / JointMass
 │   │   │                                 DriveEstimate(打撃)/ VibroEstimate(バイブロ単独)
 │   │   │                                 VibroJetEstimate(ジェット併用)
+│   │   │                                 DriveEquipment(打撃工法の杭打機・杭打船選定)
 │   │   ├── TieRod/                      008 移植 5 + 新規 1(TieRodPlacement)
 │   │   ├── AnchorPile/                  006@6d6d8cf 由来(書き直し)4 + 新規 1
 │   │   │                                 (AnchorDriveEstimate。4節3-4.6 陸上打設)
@@ -766,11 +930,11 @@ AutoCAD が既定パス以外にある場合は `-p:AcadRoot="..."` を指定す
 │       │                                 帳票取り込み 4 コマンド、AnchorDriveEstimateCommand
 │       │                                 が控え杭の打撃工法・陸上打設を担当)
 │       ├── XData/                       XDataStore(キー=値 + 1011)+ 3 部材のレコード
-│       ├── Dynamo/SpqwNodes.cs          Zero Touch Node 3 個(柱状図解析は AutoCAD 非依存の
-│       │                                 純計算のためファイルパスを直接受け取る)
+│       ├── Dynamo/SpqwNodes.cs          Zero Touch Node 7 個(断面性能・数量集計・柱状図解析・
+│       │                                 打設歩掛積算 4 系統。すべて AutoCAD 非依存の純計算)
 │       └── DrawingHelper.cs / Prompt.cs / SolidBuilder.cs
 ├── stubs/                               AutoCAD API スタブ(構文検証専用。配布禁止)
-├── tests/SheetPileQuayWall.Core.Tests/  xUnit 585 ケース + fixtures/
+├── tests/SheetPileQuayWall.Core.Tests/  xUnit 603 ケース + fixtures/
 ├── scripts/
 │   ├── port-from-legacy.sh              007/008 からの冪等移植
 │   └── verify-dll-versions.ps1          参照 DLL バージョン実測(CLAUDE.PRIVATE.md §9)
@@ -828,6 +992,7 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 | 4 | 前壁の有効幅 B(LT100) | 原本にカタログ式が無く D + 0.100 とした(信頼度**推定**)。 |
 | 5 | **帳票 CSV 取り込みの列名・レイアウト**(`SPQW_*_ImportCsv` / `SPQW_QUAYWALL_ReconcileCsv`) | サーチマス等の実際のエクスポート形式(列名・並び順・エンコード)を未確認のまま、業界の一般的な慣行を仮定して別名リストを設計した。列は名前解決(別名リスト)方式のため、実データが手に入り次第 `Core.Import` 配下の各インポータに列名・ラベルを追加すれば対応できるが、**現状のデフォルト別名は未検証**。対応エンコードも UTF-8 限定(Shift-JIS 等は事前に UTF-8 で保存し直す必要がある)。 |
 | 6 | 土質区分別・岩盤の加重平均N値/qu の除外ルール(`SpqwNodes.CalcWeightedN`) | R・Sb 用の加重平均N値には表層除外ルール(N=0 / N≦5)が基準に明記されているが、**ジェット併用γ用の土質区分別加重平均N値には除外ルールの明記が無い**ため、除外を適用しない実装とした。また岩盤層を含む地盤で R・Sb を計算する場合の扱い(岩盤層を除外し層厚も算入しない)も基準に明記が無く、009 独自の判断(推測で埋めず除外・件数報告に留める)である。 |
+| 7 | **打撃工法の杭打機・杭打船選定表**(3-4.5-14〜15、3-4.6-12〜13「作業船・機械の選定」) | セル結合で崩れているが、結合位置から対応を読み取って実装した(`FrontWall.DriveEquipment`)。クローラ式杭打機はハンマ規格→3ランク「4〜4.5t / 6.5〜8t(結合セル) / 10〜12.5t」で、**陸上打設の表にはハンマ15.0tの行が無いため15.0tは表外(別途検討)**。杭打船は「4〜4.5t・6.5t→H-65 / 7〜8t・10〜12.5t→H-125 / 15.0t→H-150」。いずれも信頼度**推定**であり、**境界の最終確認は原本の表で行うこと。** |
 
 ### 9.2 実装範囲の限定
 
@@ -838,7 +1003,7 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 | 3 | **振動工法の陸上打設(バイブロ単独)は基準に鋼管矢板の歩掛が無い**。16節 3-2 の適用範囲は海上打設に限られ、陸上のバイブロ歩掛(16節 2-1)は鋼矢板・H 形鋼杭が対象で鋼管矢板を含まない。そのため `SPQW_FRONTWALL_VibroEstimate` は施工区分を尋ねず海上固定としている。 |
 | 4 | ~~前壁の壁一括生成が無い~~ → **`SPQW_FRONTWALL_ImportCsv` で解消**(帳票 CSV から一括生成)。ただし**直線配置のみ**を想定しており、平面線形が曲がる・折れる岸壁には対応しない。各矢板の Y は「1 つ前の矢板自身の有効幅」だけ加算して求めるため、外径・継手が変化する遷移区間では概算になる(§9.1 の 5 とあわせて実データでの検証が必要)。手動で 1 本ずつ配置したい場合は従来どおり `SPQW_FRONTWALL_Create` を使う。 |
 | 5 | **工種体系へのマッピングは未実装**。`SPQW_QUAYWALL_Estimate` は鋼材質量の集計までで、『港湾工事工種体系ツリー.md』のレベル体系への対応付けは行っていない。 |
-| 6 | **打設歩掛の Dynamo ノードは未実装**。Dynamo は断面性能・施設数量・柱状図解析の 3 ノードのみ(§4)。 |
+| 6 | ~~打設歩掛の Dynamo ノードは未実装~~ → **§4.5〜4.8 の 4 ノードで解消**(前壁の打撃/バイブロ単独/ジェット併用、控え杭の打撃工法)。ただし D/t/L 等の寸法チェックは行わないため、AutoCAD コマンド側(範囲チェックあり)より入力ミスに気付きにくい点に注意。 |
 | 7 | **タイロッド・控え杭の帳票 CSV は平面位置 Y が必須列**。前壁 CSV のような自動配置(有効幅の累積)は行わない。タイロッド取付間隔からの自動採番も未実装のため、Y は帳票側で明示すること。 |
 | 8 | **控え杭の帳票 CSV は前壁との整合チェックを取り込み時に行えない**。外径・肉厚・全長の単体範囲チェックのみを取り込み時に行い、前壁との span 干渉チェック(`AnchorAlignment.Validate`)は前壁選択後に `SPQW_ANCHORPILE_ImportCsv` 内で行う(§5.5 に記載)。 |
 | 9 | **控え杭の打設歩掛は陸上打設のみ**(`SPQW_ANCHORPILE_Estimate`)。4節 3-4.6 には海上打設の船団構成・労務編成もあるが未実装。前壁が `_Estimate`→`_VibroEstimate`→`_VibroJetEstimate` と段階的に増えたのと同様、海上版は追加できる。 |
@@ -868,14 +1033,22 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 
 ## 10. 旧版 README からの変更点
 
-本版は **§4 Dynamo ノード の全面改訂**を目的とした改訂である。それ以前の機能追加履歴(帳票 CSV 取り込み・付帯船舶・控え杭打設歩掛・柱状図解析ノードの追加経緯)は git log と [`docs/implementation-plan.md`](docs/implementation-plan.md) の変更履歴を参照。
+それ以前の機能追加履歴(帳票 CSV 取り込み・付帯船舶・控え杭打設歩掛・柱状図解析ノード・Dynamo 節全面改訂の経緯)は git log と [`docs/implementation-plan.md`](docs/implementation-plan.md) の変更履歴を参照。
 
-- **§4 Dynamo ノード**: 全面書き直し。
-  - **§4.1 共通仕様**を新設(カテゴリ・`MultiReturn` 日本語キー・未配線ポートのデフォルト実行・list-level 自動反復・mm→m の単位境界・エラー動作・未実装ノードの明記)。
-  - 3 ノードすべてに**節を分けて説明・配線図・入力表・出力表を記載**。入力表は CLAUDE.PRIVATE.md §3 の 5 列形式(英語名 / 日本語名 / 単位 / デフォルト値 / 範囲)に統一した(旧版は 入力/単位/デフォルト値 の 3 列で、複数入力を 1 行に圧縮していた)。
-  - 各入力の**検証有無を明記**: `CalcSection` は `InputValidator` で D/t/L を検証、`CalcQuayWallQuantity` は継手コード以外の**範囲チェックを行わない**(検討段階の道具という位置づけ)、`CalcWeightedN` は空パス・ファイル不存在・行不備のすべてで例外。この記載は Core 実装(`InputValidator.cs` / `QuayWallEstimate.Compute` / `BoringLogAnalysis.Parse`)を再確認のうえ記述した。
-  - 出力表に**信頼度ラベル**(確定/概算/推定)と根拠(K011・§6 該当節)を付与。
-  - **§4.5 グラフ配線例**を新設し、`docs/features.html` の推奨ノード例 4 本(候補径比較・施工順位別継手質量・施設概算の Excel 書き出し・柱状図の加重平均N値)を Core 実行で検証済みの数値とともに転記。Dynamo 実行系が無い環境のため「グラフとしての動作は未検証」であることを明記。
-- **§9.2 の 6**: 「Dynamo は断面性能と施設数量の 2 ノードのみ」という**旧記載(2 ノード)が実態(3 ノード)と食い違っていたのを修正**。
-- **§9.2 の 11(新規)**: `CalcWeightedN` と積算コマンドの自動連携が無いこと、および積算コマンドが R 用・Sb 用を区別せず単一の `nAvg` を受けることを既知の制約として明文化。
-- 上記以外の節(§1〜3・§5〜9)は内容変更なし(コマンド 19 個・テスト 585 件・Dynamo 3 ノードの数値は現状と一致していることを確認済み)。
+本版は次の 2 つの機能追加と、それらへの批判的レビュー(別セッション)での指摘反映を含む。
+
+**(1) 打撃工法の杭打機・杭打船選定(新規 Core `FrontWall.DriveEquipment` + コマンド拡張)**
+
+- 基準原文 3-4.5-14〜15/3-4.6-12〜13「作業船・機械の選定」を確認した結果、振動工法(バイブロ単独)には実装済みだった主船選定が打撃工法には無いことが判明したため追加した。ハンマ規格から陸上打設の「クローラ式杭打機」(3ランク: 4〜4.5t / 6.5〜8t / 10〜12.5t。**ハンマ15.0tは陸上打設の表に行が無く表外**)+条件該当時の「クローラクレーン(固定50t吊)」、海上打設の「杭打船」(H-65/H-125/H-150)を選定する。台船・揚錨船・潜水士船は既存 `VibroEstimate` の該当メンバーを再利用(原文注記により16節3-2と同一表であることを確認済み)。ランク対応はセル結合位置からの読み取りで信頼度**推定**(§9.1 の 7)。
+- **引船は「現場条件による追加船団」**(3-4.5-15 注1「杭打船の移動が必要な場合は、引船を計上する」)のため、無条件計上とせず `needTugBoat` の問いで分離した(レビュー指摘の反映)。
+- `DriveEstimate.cs` / `DriveEstimateTests.cs` には触れていない。両ファイルは `scripts/port-from-legacy.sh` が 007@b12b188 と完全同期させる対象であり(実行後 `git diff` が空であることを直接確認済み)、直接メソッドを追加すると再実行時に消える。控え杭側の `AnchorPile.AnchorDriveEstimate` と同じ回避パターンとして新規ファイルに実装した。ハンマ規格ラベルの転記が 007 側の変更で乖離するリスクは、`GetHammerClass` の実戻り値を通す連結テスト(T1259)で検出する。
+- `SPQW_FRONTWALL_Estimate` に `needCrawlerCrane`(陸上)/`needTugBoat`・`needDiverVessel`(海上)のプロンプトと「作業船・機械」出力ブロック、および他の Estimate 系コマンドには既にあった Q≦0 ガードを追加。`SPQW_ANCHORPILE_Estimate` に `needCrawlerCrane` を追加。潜水士船等のプロンプト文言は既存 2 コマンドの形式(「[計上しない(N)/計上する(Y)]」)に統一した。
+
+**(2) 打設歩掛積算 4 系統の Dynamo ノード化(§4.5〜4.8)**
+
+- 新規ノード 4 個: `CalcFrontWallDriveEstimate` / `CalcVibroEstimate` / `CalcVibroJetEstimate` / `CalcAnchorPileDriveEstimate`。§9.2 の「打設歩掛の Dynamo ノードは未実装」を解消。対応する AutoCAD コマンドの対話フロー・出力を移植し、コマンドが選択済み XData から読む値(外径・肉厚・全長・傾斜角等)は明示引数に置き換えた。コマンドの「エラーメッセージを表示して中断」箇所は `ArgumentException` に置き換えている(`CalcWeightedN` と同じ規約)。
+- D/t/L 等の寸法は範囲チェックを行わない(AutoCAD の Estimate 系コマンドが検証済み XData を信頼して再検証しないのと同じモデル)。ただし `jetCount` はコマンドのプロンプト範囲(1〜4)と同じ制約を例外で課す — 範囲外を黙って通すとジェット用発電機・水中ポンプが空欄のまま積算が出るため。
+- 4 ノードの計算は既存 Core メソッドの組合せであり、Core の式・表は既存テストで検証済み。ノード自体の妥当性はスクラッチ検証(Core 層を直接呼び出す再現コード)で主要な組合せの出力を手計算・既存テスト値(例: `GetSb(800,20)=1.09`)と突き合わせて確認した。
+- レビュー指摘の反映: `CalcVibroJetEstimate` で受け取るだけで未使用だった `nozzleCount` を出力へエコーする形に修正(ジェット使用台数も同様)。出力キー「合計質量」の単位・母数を統一(前壁打撃=全本数 t、バイブロ単独は「1本当り合計質量 [t]」へ改名)。`CalcAnchorPileDriveEstimate` にコマンドが表示する単位重量 W を追加。
+
+**数値の更新**: テスト 585 → **603 ケース**(DriveEquipmentTests の 18 ケース追加)、Dynamo ノード 3 → **7 個**、Core に `FrontWall/DriveEquipment.cs` を新規追加。コマンド数は 19 個で変更なし。
