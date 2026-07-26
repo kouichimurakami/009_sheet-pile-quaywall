@@ -213,6 +213,17 @@
     color: var(--ink);
   }
 
+  .sec h4 {
+    font-family: var(--data);
+    font-weight: 400;
+    font-size: 0.8rem;
+    letter-spacing: 0.01em;
+    margin: 0.9rem 0 0;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--line);
+    color: var(--steel);
+  }
+
   .sec p {
     margin: 0;
     max-width: 44em;
@@ -774,6 +785,8 @@
         ジオメトリを扱わない純計算のため <code>ProtoGeometry.dll</code> は参照しない。
       </p>
 
+      <h3>ノード一覧</h3>
+
       <pre class="code"> [Number] D_mm ──────┐
  [Number] t_mm ──────┤
  [Number] L_m  ──────┤── <b>SpqwNodes.CalcSection</b> ──┬── 断面積 A [cm2]
@@ -786,9 +799,118 @@
                                                  ├── 有効幅 B [mm]
                                                  └── 継手質量 (1接続) [kg/m]</pre>
 
+      <pre class="code"> [Number]  frontD_mm ────────────┐
+ [Number]  frontT_mm ────────────┤
+ [Number]  frontL_m ─────────────┤
+ [String]  jointType ────────────┤
+ [Number]  frontPieceCount ──────┤
+ [Number]  tieRodSetCount ───────┤── <b>SpqwNodes.CalcQuayWallQuantity</b> ──┬── 施設延長 [m]
+ [Number]  tieRodMassPerSet_kg ──┤                                   ├── 継手接続数 [箇所]
+ [Number]  anchorPileCount ──────┤                                   ├── 前壁 本管質量 [kg]
+ [Number]  anchorD_mm ───────────┤                                   ├── 前壁 継手質量 [kg]
+ [Number]  anchorT_mm ───────────┤                                   ├── タイロッド質量 [kg]
+ [Number]  anchorL_m ────────────┤                                   ├── 控え杭 質量 [kg]
+ [Boolean] anchorClosedTip ──────┘                                   └── 合計質量 [kg]</pre>
+
       <p class="note">
-        もう 1 つの <code>SpqwNodes.CalcQuayWallQuantity</code> は、前壁・タイロッド・控え杭の
-        諸元と本数から施設 1 件分の鋼材質量を集計する(7 項目を返す)。
+        <code>CalcQuayWallQuantity</code> は前壁・タイロッド・控え杭の諸元と本数から、
+        施設 1 件分の鋼材質量を集計する。図面はまだ無く諸元だけが決まっている検討段階で、
+        AutoCAD を開かずに概算したいときに使う。
+      </p>
+
+      <h3>推奨ノード例</h3>
+      <p>
+        以下は 3 つとも Dynamo の標準機能(list-level 自動反復・既存の I/O ノード)を組み合わせただけで、
+        SpqwNodes 側に特別な対応は要らない。この開発環境には Dynamo 実行系が無いため
+        <strong>グラフとしての動作は未検証</strong>であり、数値は Core 層(<code>SectionProperties</code> /
+        <code>QuayWallEstimate</code>)を直接呼び出して算出した参考値である。
+      </p>
+
+      <h4>1. 候補径の比較検討 — 1 本の Code Block でまとめて計算する</h4>
+      <p>
+        Zero Touch Node は入力にリストを渡すと、Dynamo が自動で 1 要素ずつ関数を呼び出し、
+        結果をリストとして返す(list-level 自動反復)。候補となる外径を <code>Code Block</code> に
+        列挙するだけで、断面性能を横並びに比較できる。肉厚・全長・継手形式を 1 本の矢板と共通にして
+        比較すれば、径をひとつ上げたときの単位重量・有効幅の増分が一目でわかる。
+      </p>
+
+      <pre class="code"> [Code Block]
+   D_mm = {700,800,900,1000,1100};  ────┐
+ [Number] t_mm = 12.0 ───────────────────┤
+ [Number] L_m = 20.0 ─────────────────────┤── <b>SpqwNodes.CalcSection</b> ──┬── 単位重量 W [kg/m]
+ [String] jointType = "LT75" ─────────────┘                           ├── 有効幅 B [mm]
+                                                                     └── 本管質量 [kg]</pre>
+
+      <div class="tw">
+        <table>
+          <thead>
+            <tr><th>D [mm]</th><th>A [cm²]</th><th>W [kg/m]</th><th>本管質量 [kg]</th><th>i [cm]</th><th>B [mm]</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="num">700</td><td class="num">259.37</td><td class="num">203.59</td><td class="num">4,072</td><td class="num">24.33</td><td class="num">773.7</td></tr>
+            <tr><td class="num">800</td><td class="num">297.07</td><td class="num">233.18</td><td class="num">4,664</td><td class="num">27.86</td><td class="num">875.2</td></tr>
+            <tr><td class="num">900</td><td class="num">334.77</td><td class="num">262.78</td><td class="num">5,256</td><td class="num">31.40</td><td class="num">976.4</td></tr>
+            <tr><td class="num">1000</td><td class="num">372.47</td><td class="num">292.37</td><td class="num">5,847</td><td class="num">34.93</td><td class="num">1,077.3</td></tr>
+            <tr><td class="num">1100</td><td class="num">410.17</td><td class="num">321.96</td><td class="num">6,439</td><td class="num">38.47</td><td class="num">1,178.1</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="note">
+        肉厚 12 mm・全長 20 m・LT75 で共通のとき、外径を 700 → 1100 mm へ 1 段刻みで上げると
+        単位重量は 203.6 → 322.0 kg/m とほぼ線形に増える。継手質量(1 接続あたり 32.60 kg/m)は
+        外径に依らず一定であることも、この並びから読み取れる。
+      </p>
+
+      <h4>2. 施工順位ごとの継手質量 — Core の判定ロジックをそのまま流用する</h4>
+      <p>
+        継手の要否・雌雄は施工順位から一意に決まる(<code>PieceAssignment</code>)。
+        Dynamo 側では <code>List.Create</code> と <code>List.Count</code> で「1 本目・中間・最終本」の
+        3 パターンを作り、<code>CalcSection</code> の断面性能と組み合わせれば、壁を構成する矢板の
+        総本数を変えるたびに手計算し直す必要がなくなる。
+      </p>
+
+      <pre class="code"> [Number] pieceCount = 10;  ── List.Count → 総本数
+                                       │
+   piece 1  ── 継手 +Y 側のみ(先頭)──┤
+   piece 2〜9 ── 継手 両側 ───────────┼── 継手質量(1本あたり)= 側別質量の合計 × L_m
+   piece 10 ── 継手 −Y 側のみ(末尾)──┘</pre>
+
+      <p class="note">
+        1 本目・最終本は片側だけ、中間本は両側の継手を負担する。施設延長側で見ると
+        「継手接続数 = 総本数 − 1」であり、両者は独立に成立する等式として整合性チェックに使える
+        (下の例 3 の 9 箇所と、この壁が 10 本であることを突き合わせられる)。
+      </p>
+
+      <h4>3. 施設 1 件分の概算 → Excel へ書き出す</h4>
+      <p>
+        図面が無い設計検討段階の代表的な使い方。<code>CalcQuayWallQuantity</code> の既定値
+        (前壁 φ800×t12×L20m LT75 を 10 本、タイロッド 5 組×150 kg、控え杭(開端)φ800×t12×L18m を
+        5 本)をそのまま実行すると、以下の 7 項目が返る。<code>Data.ExportToCSV</code> や
+        <code>Excel.WriteToFile</code> に繋げば、AutoCAD を開かずに概算数量書を作れる。
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead>
+            <tr><th>項目</th><th>値</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>施設延長 [m]</td><td class="num">8.752</td></tr>
+            <tr><td>継手接続数 [箇所]</td><td class="num">9</td></tr>
+            <tr><td>前壁 本管質量 [kg]</td><td class="num">46,637</td></tr>
+            <tr><td>前壁 継手質量 [kg]</td><td class="num">5,868</td></tr>
+            <tr><td>タイロッド質量 [kg]</td><td class="num">750</td></tr>
+            <tr><td>控え杭 質量 [kg]</td><td class="num">20,987</td></tr>
+            <tr><td><strong>合計質量 [kg]</strong></td><td class="num"><strong>74,242</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="note">
+        施設延長 8.752 m は「有効幅 875.2 mm(例 1 の D=800 行と一致)× 10 本」の積であり、
+        継手接続数 9 は「総本数 10 − 1」に一致する。既定値どうしがどう連動しているかを
+        確かめてから、実際の諸元に置き換えるとよい。
       </p>
     </div>
   </section>
