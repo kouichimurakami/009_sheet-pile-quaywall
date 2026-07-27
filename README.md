@@ -904,6 +904,27 @@ dotnet build src/SheetPileQuayWall.Plugin/SheetPileQuayWall.Plugin.csproj -c Rel
 
 AutoCAD が既定パス以外にある場合は `-p:AcadRoot="..."` を指定する。
 
+### AutoCAD / Civil 3D への登録(NETLOAD)
+
+ビルドした Plugin DLL は自動ロード設定を持たないため、起動のたびに手動でロードする。
+
+1. AutoCAD 2025 または Civil 3D 2025 を起動する
+2. コマンドラインに `NETLOAD` と入力し Enter
+3. ファイル選択ダイアログで実機ビルドの出力 `src\SheetPileQuayWall.Plugin\bin\Release\net8.0-windows\SheetPileQuayWall.Plugin.dll` を選択する
+4. ロード完了後、§3 の全 19 コマンド(`SPQW_FRONTWALL_Create` 等)がコマンドラインから実行可能になる
+
+> スタブビルド(`-p:UseAutoCadStubs=true`)の出力は `AutoCadStubs.dll` を含むため NETLOAD しないこと(配布不可。§7 冒頭参照)。
+
+### Dynamo への登録(Import Library)
+
+Dynamo ノードも Dynamo 側の設定に永続登録されないため、グラフを開くたびに手動でインポートする。
+
+1. Civil 3D 2025 で `DYNAMO` コマンドを実行し Dynamo を起動する
+2. 左側のライブラリペイン下部の「Import Library...」から、NETLOAD と同じ `SheetPileQuayWall.Plugin.dll` を選択する
+3. インポート後、ノード検索に `SpqwNodes.` と入力すると §4 の 7 ノードが一覧表示される(§4.1 共通仕様)
+
+AutoCAD コマンド(NETLOAD)と Dynamo ノード(Import Library)は独立した登録操作であり、使う方だけ実行すればよい。**本手順は実機 AutoCAD / Civil 3D 環境で未検証**(§9.5「実機動作確認」参照)。
+
 ### プロジェクト構成
 
 ```
