@@ -21,5 +21,11 @@ namespace SheetPileQuayWall.Core.AnchorPile
         public double TieElevM;   // タイロッド軸心標高 Z_tr [m] (D.L. 基準)
         public double TipElevM;   // 杭先端標高 Z_tip [m] (D.L. 基準)
         public int    ColorIdx;   // 本管の色 (ACI 1〜255)
+        public double PositionY;  // 施設延長方向の位置 Y [m]
+                                  //   従来は前壁の Y をそのまま使っていたため、複数本を
+                                  //   一括生成すると全数が同一座標に重なっていた
+                                  //   (README §9.2 の 7)。本フィールドで 1 本ずつ位置を
+                                  //   与える。X は従来どおり保存せず前壁 + span から
+                                  //   都度計算する (決定8)。
     }
 }

@@ -2,7 +2,9 @@
 // 検証基準: 006@6d6d8cf src/AnchorPile.cs ComputeTipPoint / ValidateAlignment
 //   前壁軸 X(Z_tr) = 前壁挿入点 X + (Z_tr − 前壁先端 Z)·tanθ_f
 //   控え杭軸 X(Z_tr) = 前壁軸 X(Z_tr) + span − D_a/2
-//   杭先端 X = 控え杭軸 X(Z_tr) − (Z_tr − Z_tip)·tanθ_a、Y は前壁と同一
+//   杭先端 X = 控え杭軸 X(Z_tr) − (Z_tr − Z_tip)·tanθ_a
+//   Y は AnchorInput.PositionY をそのまま使う (複数本の一括生成に対応するため、
+//   前壁の Y を流用する旧挙動から変更した。README §9.2 の 7)
 
 namespace SheetPileQuayWall.Core.Tests
 {
@@ -28,11 +30,11 @@ namespace SheetPileQuayWall.Core.Tests
             {
                 OuterDm = 0.800, WallTm = 0.012, LengthM = 20.0, InclDeg = inclDeg,
                 ClosedTip = false, SpanM = spanM, TieElevM = 2.5, TipElevM = -14.0,
-                ColorIdx = 8
+                ColorIdx = 8, PositionY = 5.0
             };
         }
 
-        // T970: 直杭どうし。杭先端 X = 前壁 X + span − D_a/2、Y は前壁と同一
+        // T970: 直杭どうし。杭先端 X = 前壁 X + span − D_a/2、Y は入力値
         [Xunit.Fact]
         public void T970_Compute_BothVertical_TipXIsSpanMinusHalfDiameter()
         {
@@ -123,6 +125,47 @@ namespace SheetPileQuayWall.Core.Tests
 
             string? e = SheetPileQuayWall.Core.AnchorPile.AnchorAlignment.Validate(Front(), a);
             Xunit.Assert.Equal(expectValid, e == null);
+        }
+
+        // T977: Y は AnchorInput.PositionY をそのまま使い、前壁の Y には依存しない。
+        // 旧挙動 (front.TipPoint.Y を流用) では、複数本を一括生成すると全数が
+        // 同一座標に重なっていた (README §9.2 の 7)
+        [Xunit.Fact]
+        public void T977_Compute_PositionY_IsIndependentOfFrontWallY()
+        {
+            SheetPileQuayWall.Core.AnchorPile.AnchorInput a = Anchor();
+            a.PositionY = 12.345;
+
+            // 前壁の Y は 5.0 (Front ヘルパ) だが、控え杭は入力値に従う
+            SheetPileQuayWall.Core.AnchorPile.AnchorResult r =
+                SheetPileQuayWall.Core.AnchorPile.AnchorAlignment.Compute(Front(), a);
+
+            Xunit.Assert.Equal(12.345, r.TipPoint.Y, 9);
+
+            // X・Z は Y に影響されない
+            Xunit.Assert.Equal(10.0 - 0.400, r.TipPoint.X, 9);
+            Xunit.Assert.Equal(-14.0, r.TipPoint.Z, 9);
+        }
+
+        // T978: 配置間隔ぶんずつ Y をずらすと、控え杭が等間隔に並ぶ
+        [Xunit.Fact]
+        public void T978_Compute_SpacedPositions_ProduceDistinctY()
+        {
+            double spacing = SheetPileQuayWall.Core.TieRod.TieRodPitch.SpacingFor(0.8752, 3);
+            double[] actual = new double[4];
+
+            for (int i = 0; i < 4; i++)
+            {
+                SheetPileQuayWall.Core.AnchorPile.AnchorInput a = Anchor();
+                a.PositionY = 0.0 + i * spacing;
+                actual[i] = SheetPileQuayWall.Core.AnchorPile.AnchorAlignment.Compute(
+                    Front(), a).TipPoint.Y;
+            }
+
+            Xunit.Assert.Equal(0.0, actual[0], 9);
+            Xunit.Assert.Equal(2.6256, actual[1], 9);
+            Xunit.Assert.Equal(5.2512, actual[2], 9);
+            Xunit.Assert.Equal(7.8768, actual[3], 9);
         }
     }
 }

@@ -34,6 +34,7 @@ namespace SheetPileQuayWall.Core.Import
         private static readonly string[] TieElevAliases = { "tie_elev", "タイロッド軸心標高" };
         private static readonly string[] TipElevAliases = { "tip_elev", "杭先端標高" };
         private static readonly string[] ColorAliases = { "color", "色" };
+        private static readonly string[] PosYAliases = { "pos_y", "y", "位置y" };
 
         private static readonly System.Globalization.CultureInfo Inv =
             System.Globalization.CultureInfo.InvariantCulture;
@@ -100,6 +101,28 @@ namespace SheetPileQuayWall.Core.Import
                     int color;
                     a.ColorIdx = int.TryParse(colorText, System.Globalization.NumberStyles.Integer,
                         Inv, out color) ? color : 8;
+                }
+
+                // 位置 Y はタイロッドと同じく必須。前壁からの相対位置は自動計算できず、
+                // 省略すると全行が同一座標に重なるため (README §9.2 の 7 の解消)
+                string posYText;
+                if (CsvTable.TryGetField(row, PosYAliases, out posYText))
+                {
+                    double posY;
+                    if (double.TryParse(posYText, System.Globalization.NumberStyles.Float,
+                        Inv, out posY))
+                    {
+                        a.PositionY = posY;
+                    }
+                    else
+                    {
+                        rowErrors.Add($"位置 Y の値 '{posYText}' を数値として解釈できません。");
+                    }
+                }
+                else
+                {
+                    rowErrors.Add(
+                        "位置 Y を読み取れません(列 pos_y/Y)。省略すると全行が同一座標に重なるため必須。");
                 }
 
                 if (rowErrors.Count == 0)

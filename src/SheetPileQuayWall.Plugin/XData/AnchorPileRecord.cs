@@ -3,13 +3,19 @@
 // 控え杭の XData(RegApp: SPQW_ANCHORPILE)
 // 形式は決定9 の "キー=値"(docs/implementation-plan.md §6.1)。長さは m、角度は deg。
 //
-// 位置は保存しない。控え杭の位置は常に「前壁 + span」から導出されるため
+// 平面 X は保存しない。控え杭の X は常に「前壁 + span」から導出されるため
 // (移植元 006 ANCHORPILE_Action と同じ挙動。MOVE しても整列位置へ戻る)、
 // 前壁 Handle と span さえあれば再現できる。
+// 一方 Y は 1 本ずつ異なるため pos_y として保存する(複数本の一括生成に対応)。
 //
 // キー一覧:
 //   outer_d / wall_t / length / incl_deg / closed_tip / span / tie_elev / tip_elev / color
+//   pos_y         施設延長方向の位置 Y [m]
 //   front_handle  基準とした前壁 Solid3d の Handle(16 進文字列)
+//
+// pos_y は複数本一括生成の追加時に新設したキーで、それ以前に作成した図面には無い。
+// 読み側は欠落を検出できるよう HasPositionY を併せて返し、呼び出し側が前壁の Y で
+// 補えるようにしている(旧図面の _Action / _Query を壊さないため)。
 
 namespace SheetPileQuayWall.Plugin.XData
 {
@@ -27,6 +33,10 @@ namespace SheetPileQuayWall.Plugin.XData
 
         public string FrontHandle = "";
 
+        // pos_y キーを持つ図面から読んだか。false なら旧図面のため、
+        // 呼び出し側が前壁の Y で Input.PositionY を補うこと。
+        public bool HasPositionY;
+
         public Autodesk.AutoCAD.DatabaseServices.ResultBuffer ToBuffer()
         {
             System.Collections.Generic.List<
@@ -43,6 +53,7 @@ namespace SheetPileQuayWall.Plugin.XData
             XDataStore.AddReal(values, "tie_elev", a.TieElevM);
             XDataStore.AddReal(values, "tip_elev", a.TipElevM);
             XDataStore.AddInt(values, "color", a.ColorIdx);
+            XDataStore.AddReal(values, "pos_y", a.PositionY);
             XDataStore.AddText(values, "front_handle", FrontHandle);
 
             return XDataStore.ToBuffer(values);
@@ -69,6 +80,10 @@ namespace SheetPileQuayWall.Plugin.XData
             a.TieElevM = XDataStore.ReadReal(map, "tie_elev", a.TieElevM);
             a.TipElevM = XDataStore.ReadReal(map, "tip_elev", a.TipElevM);
             a.ColorIdx = XDataStore.ReadInt(map, "color", a.ColorIdx);
+
+            // pos_y は後から追加したキー。旧図面には無いため、欠落を呼び出し側へ伝える
+            r.HasPositionY = map.ContainsKey("pos_y");
+            a.PositionY = XDataStore.ReadReal(map, "pos_y", 0.0);
 
             r.FrontHandle = XDataStore.ReadText(map, "front_handle", "");
             return r;

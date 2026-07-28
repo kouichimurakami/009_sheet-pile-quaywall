@@ -86,8 +86,10 @@ namespace SheetPileQuayWall.Core.AnchorPile
             double headElev = SheetPileQuayWall.Core.PileGeometry.HeadElevation(
                 a.TipElevM, a.LengthM, a.InclDeg);
 
+            // Y は控え杭ごとに与える (従来は front.TipPoint.Y を流用しており、
+            // 複数本を一括生成すると全数が重なっていた。README §9.2 の 7)
             return new AnchorResult(
-                new SheetPileQuayWall.Core.Point3(tipX, front.TipPoint.Y, a.TipElevM),
+                new SheetPileQuayWall.Core.Point3(tipX, a.PositionY, a.TipElevM),
                 frontAxisX, anchorAxisX, axisSpacing, faceClearance, headElev);
         }
     }

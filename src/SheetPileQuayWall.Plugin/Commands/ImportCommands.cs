@@ -294,7 +294,8 @@ namespace SheetPileQuayWall.Plugin.Commands
                         new SheetPileQuayWall.Plugin.XData.AnchorPileRecord
                         {
                             Input = row.Input,
-                            FrontHandle = frontHandle
+                            FrontHandle = frontHandle,
+                            HasPositionY = true
                         };
 
                     Autodesk.AutoCAD.DatabaseServices.Solid3d solid =

@@ -10,8 +10,8 @@ namespace SheetPileQuayWall.Core.Tests
         public void T1160_Parse_AllColumnsPresent_FillsAnchorInput()
         {
             string csv = "outer_d_mm,wall_t_mm,length_m,incl_deg,closed_tip,span," +
-                "tie_elev,tip_elev,color\n" +
-                "800,12,20.0,0.0,0,10.000,2.500,-18.0,8\n";
+                "tie_elev,tip_elev,color,pos_y\n" +
+                "800,12,20.0,0.0,0,10.000,2.500,-18.0,8,0.0\n";
 
             SheetPileQuayWall.Core.Import.ImportResult<SheetPileQuayWall.Core.Import.AnchorPileImportRow> r =
                 SheetPileQuayWall.Core.Import.AnchorPileCsvImporter.Parse(csv);
@@ -31,8 +31,8 @@ namespace SheetPileQuayWall.Core.Tests
         public void T1161_Parse_SnapsOuterDiameterToJisStandard()
         {
             string csv = "outer_d_mm,wall_t_mm,length_m,incl_deg,closed_tip,span," +
-                "tie_elev,tip_elev,color\n" +
-                "810,12,20.0,0.0,0,10.000,2.500,-18.0,8\n";
+                "tie_elev,tip_elev,color,pos_y\n" +
+                "810,12,20.0,0.0,0,10.000,2.500,-18.0,8,0.0\n";
 
             SheetPileQuayWall.Core.Import.ImportResult<SheetPileQuayWall.Core.Import.AnchorPileImportRow> r =
                 SheetPileQuayWall.Core.Import.AnchorPileCsvImporter.Parse(csv);
@@ -50,8 +50,8 @@ namespace SheetPileQuayWall.Core.Tests
         public void T1162_Parse_ClosedTipVariants_AllParseToTrue(string closedTipText)
         {
             string csv = "outer_d_mm,wall_t_mm,length_m,incl_deg,closed_tip,span," +
-                "tie_elev,tip_elev,color\n" +
-                $"800,12,20.0,0.0,{closedTipText},10.000,2.500,-18.0,8\n";
+                "tie_elev,tip_elev,color,pos_y\n" +
+                $"800,12,20.0,0.0,{closedTipText},10.000,2.500,-18.0,8,0.0\n";
 
             SheetPileQuayWall.Core.Import.ImportResult<SheetPileQuayWall.Core.Import.AnchorPileImportRow> r =
                 SheetPileQuayWall.Core.Import.AnchorPileCsvImporter.Parse(csv);
@@ -67,8 +67,8 @@ namespace SheetPileQuayWall.Core.Tests
         public void T1163_Parse_WallThicknessOutOfManufacturingRange_ProducesError()
         {
             string csv = "outer_d_mm,wall_t_mm,length_m,incl_deg,closed_tip,span," +
-                "tie_elev,tip_elev,color\n" +
-                "800,200,20.0,0.0,0,10.000,2.500,-18.0,8\n";
+                "tie_elev,tip_elev,color,pos_y\n" +
+                "800,200,20.0,0.0,0,10.000,2.500,-18.0,8,0.0\n";
 
             SheetPileQuayWall.Core.Import.ImportResult<SheetPileQuayWall.Core.Import.AnchorPileImportRow> r =
                 SheetPileQuayWall.Core.Import.AnchorPileCsvImporter.Parse(csv);
@@ -82,8 +82,8 @@ namespace SheetPileQuayWall.Core.Tests
         [Xunit.Fact]
         public void T1164_Parse_MissingRequiredColumn_ProducesError()
         {
-            string csv = "wall_t_mm,length_m,incl_deg,closed_tip,span,tie_elev,tip_elev,color\n" +
-                "12,20.0,0.0,0,10.000,2.500,-18.0,8\n";
+            string csv = "wall_t_mm,length_m,incl_deg,closed_tip,span,tie_elev,tip_elev,color,pos_y\n" +
+                "12,20.0,0.0,0,10.000,2.500,-18.0,8,0.0\n";
 
             SheetPileQuayWall.Core.Import.ImportResult<SheetPileQuayWall.Core.Import.AnchorPileImportRow> r =
                 SheetPileQuayWall.Core.Import.AnchorPileCsvImporter.Parse(csv);
@@ -100,8 +100,8 @@ namespace SheetPileQuayWall.Core.Tests
         public void T1165_Parse_DoesNotPerformFrontWallCrossCheck()
         {
             string csv = "outer_d_mm,wall_t_mm,length_m,incl_deg,closed_tip,span," +
-                "tie_elev,tip_elev,color\n" +
-                "800,12,20.0,0.0,0,3.000,2.500,-18.0,8\n"; // span=3.0m は前壁次第で干渉し得る
+                "tie_elev,tip_elev,color,pos_y\n" +
+                "800,12,20.0,0.0,0,3.000,2.500,-18.0,8,0.0\n"; // span=3.0m は前壁次第で干渉し得る
 
             SheetPileQuayWall.Core.Import.ImportResult<SheetPileQuayWall.Core.Import.AnchorPileImportRow> r =
                 SheetPileQuayWall.Core.Import.AnchorPileCsvImporter.Parse(csv);
@@ -115,9 +115,9 @@ namespace SheetPileQuayWall.Core.Tests
         public void T1166_Parse_MultipleRows_AllImported()
         {
             string csv = "outer_d_mm,wall_t_mm,length_m,incl_deg,closed_tip,span," +
-                "tie_elev,tip_elev,color\n" +
-                "800,12,20.0,0.0,0,10.000,2.500,-18.0,8\n" +
-                "900,14,22.0,0.0,1,12.000,2.500,-20.0,8\n";
+                "tie_elev,tip_elev,color,pos_y\n" +
+                "800,12,20.0,0.0,0,10.000,2.500,-18.0,8,0.0\n" +
+                "900,14,22.0,0.0,1,12.000,2.500,-20.0,8,2.6256\n";
 
             SheetPileQuayWall.Core.Import.ImportResult<SheetPileQuayWall.Core.Import.AnchorPileImportRow> r =
                 SheetPileQuayWall.Core.Import.AnchorPileCsvImporter.Parse(csv);
@@ -125,6 +125,45 @@ namespace SheetPileQuayWall.Core.Tests
             Xunit.Assert.Empty(r.Errors);
             Xunit.Assert.Equal(2, r.Rows.Count);
             Xunit.Assert.True(r.Rows[1].Input.ClosedTip);
+
+            // 位置 Y が行ごとに読まれる(旧版は列自体が無く全行が重なっていた)
+            Xunit.Assert.Equal(0.0, r.Rows[0].Input.PositionY, 4);
+            Xunit.Assert.Equal(2.6256, r.Rows[1].Input.PositionY, 4);
+        }
+
+        // T1167: 位置 Y の列が無ければエラー。省略を許すと全行が同一座標に重なるため
+        //        必須にしている(README §9.2 の 7 の解消)
+        [Xunit.Fact]
+        public void T1167_Parse_MissingPositionY_ProducesError()
+        {
+            string csv = "outer_d_mm,wall_t_mm,length_m,incl_deg,closed_tip,span," +
+                "tie_elev,tip_elev,color\n" +
+                "800,12,20.0,0.0,0,10.000,2.500,-18.0,8\n";
+
+            SheetPileQuayWall.Core.Import.ImportResult<SheetPileQuayWall.Core.Import.AnchorPileImportRow> r =
+                SheetPileQuayWall.Core.Import.AnchorPileCsvImporter.Parse(csv);
+
+            Xunit.Assert.Empty(r.Rows);
+            Xunit.Assert.Single(r.Errors);
+            Xunit.Assert.Contains("位置 Y", r.Errors[0].Message);
+        }
+
+        // T1168: 位置 Y の別名(Y / 位置y)も解決できる(タイロッドと同じ別名リスト)
+        [Xunit.Theory]
+        [Xunit.InlineData("pos_y")]
+        [Xunit.InlineData("Y")]
+        [Xunit.InlineData("位置y")]
+        public void T1168_Parse_PositionYAliases_AllResolve(string columnName)
+        {
+            string csv = "outer_d_mm,wall_t_mm,length_m,incl_deg,closed_tip,span," +
+                $"tie_elev,tip_elev,color,{columnName}\n" +
+                "800,12,20.0,0.0,0,10.000,2.500,-18.0,8,7.8768\n";
+
+            SheetPileQuayWall.Core.Import.ImportResult<SheetPileQuayWall.Core.Import.AnchorPileImportRow> r =
+                SheetPileQuayWall.Core.Import.AnchorPileCsvImporter.Parse(csv);
+
+            Xunit.Assert.Empty(r.Errors);
+            Xunit.Assert.Equal(7.8768, r.Rows[0].Input.PositionY, 4);
         }
     }
 }

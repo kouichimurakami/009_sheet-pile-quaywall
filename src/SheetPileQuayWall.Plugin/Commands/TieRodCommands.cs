@@ -21,6 +21,9 @@ namespace SheetPileQuayWall.Plugin.Commands
     {
         public const string LayerName = "タイ材";
 
+        // 取付間隔の既定値(矢板 3 本ごと)
+        private const int DefaultEveryNPiles = 3;
+
         // ════════════════════════════════════════════════════════════════════
         // SPQW_TIEROD_Create: 前壁選択 → 入力 → 組数分の Solid3d 生成
         // ════════════════════════════════════════════════════════════════════
@@ -47,11 +50,6 @@ namespace SheetPileQuayWall.Plugin.Commands
                 new SheetPileQuayWall.Core.TieRod.TieRodParameters();
 
             // 前壁から決まる値を既定値として提示する(整合チェックを通しやすくするため)
-            p.PileDiameter = front.OuterDm;
-            p.PilePitch = SheetPileQuayWall.Core.FrontWall.JointParameters.EffectiveWidth(
-                front.OuterDm,
-                SheetPileQuayWall.Core.FrontWall.JointParameters.FromCode(front.JointCode));
-
             double positionY;
             if (!PromptParameters(ed, p, front, out positionY))
             {
@@ -349,20 +347,47 @@ namespace SheetPileQuayWall.Plugin.Commands
                 p.SpanLength, 3.0, 40.0, out value)) return false;
             p.SpanLength = value;
 
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
-                ed, $"\n海側鋼管矢板径 (m) <{p.PileDiameter:F3}>: ",
-                p.PileDiameter, 0.600, 1.600, out value)) return false;
-            p.PileDiameter = value;
+            // 海側鋼管矢板径・矢板ピッチは前壁から自動代入する。
+            // CrossMemberValidator が前壁と 1mm 精度で照合するため、手入力を求めても
+            // 「Enter 以外は全て検証エラー」になるだけだった。
+            // _Action もここを通るため、前壁を変更した場合は再計算される
+            p.PileDiameter = front.OuterDm;
+            p.PilePitch = SheetPileQuayWall.Core.FrontWall.JointParameters.EffectiveWidth(
+                front.OuterDm,
+                SheetPileQuayWall.Core.FrontWall.JointParameters.FromCode(front.JointCode));
 
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
-                ed, $"\n鋼管矢板ピッチ (m, 前壁の有効幅 B) <{p.PilePitch:F4}>: ",
-                p.PilePitch, 0.600, 2.000, out value)) return false;
-            p.PilePitch = value;
+            ed.WriteMessage(
+                $"\n  前壁から取得: 海側鋼管矢板径 {p.PileDiameter:F3} m / " +
+                $"矢板ピッチ (有効幅 B) {p.PilePitch:F4} m");
 
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
-                ed, $"\nタイロッド取付間隔 (m, ピッチの整数倍) <{p.TieSpacing:F4}>: ",
-                p.TieSpacing, 0.600, 20.000, out value)) return false;
-            p.TieSpacing = value;
+            // 取付間隔は「矢板何本ごと」で受け、ピッチの整数倍として導出する。
+            // 従来は m 入力で、利用者が B × n を手計算する必要があった
+            // (既定値 2.400 m は B=0.8752 m の整数倍でなく Enter で検証エラーになった)
+            int everyNPiles = SheetPileQuayWall.Core.TieRod.TieRodPitch.PilesPerSpacing(
+                p.TieSpacing, p.PilePitch);
+            if (everyNPiles < SheetPileQuayWall.Core.TieRod.TieRodPitch.EveryNPiles_Min)
+            {
+                everyNPiles = DefaultEveryNPiles;
+            }
+
+            int pickedN;
+            if (!SheetPileQuayWall.Plugin.Prompt.TryAskInt(
+                ed, $"\nタイロッド取付間隔 (矢板何本ごと) <{everyNPiles}>: ",
+                everyNPiles,
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.EveryNPiles_Min,
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.EveryNPiles_Max,
+                out pickedN)) return false;
+
+            if (!SheetPileQuayWall.Plugin.Prompt.Report(ed,
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.Validate(p.PilePitch, pickedN)))
+            {
+                return false;
+            }
+
+            p.TieSpacing = SheetPileQuayWall.Core.TieRod.TieRodPitch.SpacingFor(
+                p.PilePitch, pickedN);
+            ed.WriteMessage(
+                $"\n  → 取付間隔 = {p.PilePitch:F4} m × {pickedN} 本 = {p.TieSpacing:F4} m");
 
             int count;
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskInt(

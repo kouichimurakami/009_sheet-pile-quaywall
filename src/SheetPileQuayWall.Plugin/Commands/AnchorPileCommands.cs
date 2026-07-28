@@ -17,6 +17,11 @@ namespace SheetPileQuayWall.Plugin.Commands
     {
         public const string LayerName = "控え杭";
 
+        // SPQW_ANCHORPILE_Create の一括生成の既定値
+        private const int DefaultEveryNPiles = 3;
+        private const int DefaultPileCount = 4;
+        private const int MaxPileCount = 200;
+
         // ════════════════════════════════════════════════════════════════════
         // SPQW_ANCHORPILE_Create: 前壁選択 → タイロッド軸線に整列した控え杭を生成
         // ════════════════════════════════════════════════════════════════════
@@ -42,23 +47,74 @@ namespace SheetPileQuayWall.Plugin.Commands
             SheetPileQuayWall.Plugin.XData.AnchorPileRecord record =
                 new SheetPileQuayWall.Plugin.XData.AnchorPileRecord();
             record.FrontHandle = frontHandle;
+            record.HasPositionY = true;
             // 杭先端標高の既定値は前壁に合わせる(移植元 006 と同じ)
             record.Input.TipElevM = front.TipPoint.Z;
+            // 始点は選択した前壁の Y。以降は配置間隔ぶんずつ +Y へ進む
+            record.Input.PositionY = front.TipPoint.Y;
 
             if (!PromptRecord(ed, record, front))
             {
                 return;
             }
 
-            SheetPileQuayWall.Core.AnchorPile.AnchorResult result =
-                SheetPileQuayWall.Core.AnchorPile.AnchorAlignment.Compute(
-                    front.ToRef(), record.Input);
-
-            BuildAndAppend(db, record, result, replaceId: null);
-
-            PrintSummary(ed, record, result, front);
+            // 配置間隔・本数(タイロッドと同じく「矢板何本ごと」で受ける)
+            double pilePitch_m = SheetPileQuayWall.Core.FrontWall.JointParameters.EffectiveWidth(
+                front.OuterDm,
+                SheetPileQuayWall.Core.FrontWall.JointParameters.FromCode(front.JointCode));
             ed.WriteMessage(
-                $"\nパラメータを XData (RegApp: " +
+                $"\n  前壁から取得: 矢板ピッチ (有効幅 B) {pilePitch_m:F4} m");
+
+            int everyNPiles;
+            if (!SheetPileQuayWall.Plugin.Prompt.TryAskInt(
+                ed, $"\n控え杭 配置間隔 (矢板何本ごと) <{DefaultEveryNPiles}>: ",
+                DefaultEveryNPiles,
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.EveryNPiles_Min,
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.EveryNPiles_Max,
+                out everyNPiles))
+            {
+                return;
+            }
+            if (!SheetPileQuayWall.Plugin.Prompt.Report(ed,
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.Validate(pilePitch_m, everyNPiles)))
+            {
+                return;
+            }
+
+            double spacing_m = SheetPileQuayWall.Core.TieRod.TieRodPitch.SpacingFor(
+                pilePitch_m, everyNPiles);
+            ed.WriteMessage(
+                $"\n  → 配置間隔 = {pilePitch_m:F4} m × {everyNPiles} 本 = {spacing_m:F4} m");
+
+            int pileCount;
+            if (!SheetPileQuayWall.Plugin.Prompt.TryAskInt(
+                ed, $"\n控え杭 本数 (本) <{DefaultPileCount}>: ",
+                DefaultPileCount, 1, MaxPileCount, out pileCount))
+            {
+                return;
+            }
+
+            double startY = record.Input.PositionY;
+            SheetPileQuayWall.Core.AnchorPile.AnchorResult? lastResult = null;
+
+            for (int i = 0; i < pileCount; i++)
+            {
+                record.Input.PositionY = startY + i * spacing_m;
+                lastResult = SheetPileQuayWall.Core.AnchorPile.AnchorAlignment.Compute(
+                    front.ToRef(), record.Input);
+                BuildAndAppend(db, record, lastResult, replaceId: null);
+            }
+
+            ed.WriteMessage("\n=== 控え杭 一括生成 ===");
+            ed.WriteMessage($"\n  本数          : {pileCount,10} 本");
+            ed.WriteMessage($"\n  配置間隔      : {spacing_m,10:F4} m ({everyNPiles} 本ごと)");
+            ed.WriteMessage($"\n  始点 Y (1 本目): {startY,10:F4} m");
+            ed.WriteMessage($"\n  終点 Y ({pileCount} 本目): " +
+                $"{startY + (pileCount - 1) * spacing_m,10:F4} m");
+
+            PrintSummary(ed, record, lastResult!, front);
+            ed.WriteMessage(
+                $"\n{pileCount} 本を生成し、パラメータを XData (RegApp: " +
                 $"{SheetPileQuayWall.Plugin.XData.AnchorPileRecord.RegAppName}) に保存しました。");
             ed.WriteMessage("\nSPQW_ANCHORPILE_Create 完了。");
         }
@@ -109,6 +165,16 @@ namespace SheetPileQuayWall.Plugin.Commands
                     return;
                 }
                 stored.FrontHandle = frontHandle;
+            }
+
+            // pos_y を持たない旧図面は、従来の挙動どおり前壁の Y へ整列させる
+            if (!stored.HasPositionY)
+            {
+                stored.Input.PositionY = front.TipPoint.Y;
+                stored.HasPositionY = true;
+                ed.WriteMessage(
+                    $"\n  位置 Y が保存されていないため、前壁の Y = {front.TipPoint.Y:F4} m " +
+                    "へ整列します(旧版で作成した図面)。");
             }
 
             if (!PromptRecord(ed, stored, front))
