@@ -552,6 +552,70 @@ Civil 3D 2025 同梱の Dynamo 3.3 で使う Zero Touch Node。全 **7 ノード
 
 R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しきい値(N≦5)には該当して除外されるが、R の除外しきい値(N=0)には該当しないため。打止め層(N=55、50回法・貫入量 3.3 cm)は換算N値 1500÷3.3≒454.5 に置き換えて集計している。
 
+### 4.10 CSV を Dynamo から使う
+
+**ノードが直接読める CSV は柱状図 CSV(§5.6)だけ**である。帳票 CSV(§5.5)は AutoCAD コマンド `SPQW_*_ImportCsv` 専用で、`SpqwNodes` 側に読み込み口を持たない。
+
+| CSV | 読み込み先 | ノードから直接読めるか |
+|---|---|---|
+| 柱状図 CSV | `CalcWeightedN` の `csvPath` 入力 | ○ 専用ポートあり(経路 A) |
+| 帳票 CSV | `SPQW_FRONTWALL_ImportCsv` 等 | × Dynamo 標準ノードで読んで配線する(経路 B) |
+
+**経路 A. 柱状図 CSV → `CalcWeightedN` → 積算ノード**
+
+```
+ [File Path]                [SpqwNodes.CalcWeightedN]        [Math.Round]
+  Browse... ──── string ──▶ csvPath                              ▲
+  boringlog.csv                加重平均N値 (R用) ─────────────────┘
+                               根入れ長 (R用) [m] ──────┐         │
+                               加重平均N値 (Sb用)       │         │
+                               … ほか 7 ポート ──▶ [Watch]        │
+                                                        │         │
+              [SpqwNodes.CalcFrontWallDriveEstimate] ◀───┘         │
+                 penetration_m                                     │
+                 nAvg ◀────────────────────────────────────────────┘
+                 D_mm / t_mm / L_m ◀── [Number]
+                        貫入抵抗値 R [kN] ──▶ [Watch]
+                        推奨ハンマ ─────────▶ [Watch]
+                        … ──▶ [List.Create] ──▶ [Data.ExportToCSV]
+```
+
+1. `File Path` ノードを置き、Browse... で `docs/samples/boringlog.csv` を選ぶ(文字列としてパスを出力する)
+2. `SpqwNodes.CalcWeightedN` の `csvPath` へ配線する。**このノードだけは未配線だと例外**になる(他の 6 ノードは既定値で動く)
+3. 使う出力ポートに `Watch` を繋ぐ。10 ポート全部を繋ぐ必要はない
+4. 積算ノードへ渡す場合、`nAvg` は **int 型**のため `Math.Round` を挟む。`CalcWeightedN` は小数を返す
+5. 書き出しは `List.Create` で束ねてから `Data.ExportToCSV` へ
+
+該当層が無い出力(玉石混りレキ・固結土など)は `null` ではなく**空文字**を返すため、下流で数値演算するとエラーになる。
+
+積算ノードは R 用・Sb 用を区別せず単一の `nAvg` を両方に使う(§9.2 の 11)。上表の例では 160.848 と 185.133 で 24 の差があり、どちらを採るかは利用者判断。
+
+**経路 B. 帳票 CSV → Dynamo 標準ノードで読んで配線**
+
+```
+ [File Path]        [Data.ImportCSV]     [List.DropItems]    [List.Transpose]
+  frontwall_ ──▶ filePath            ──▶ amount ◀─ 1     ──▶
+  import_minimal.csv transpose ◀─ false   (ヘッダー行を除去)      │
+                                                                 ▼
+                                                    [List.GetItemAtIndex]
+                                                      index ◀── 0(外径列)
+                                                                 │
+                        [SpqwNodes.CalcSection] ◀────────────────┘ D_mm
+                           t_mm ◀── 列1 / L_m ◀── 列2
+                           jointType ◀── [String] "LT75"
+                                断面積 A [cm2] ──▶ [Watch]  ← 10 要素のリスト
+                                有効幅 B [mm]  ──▶ [Watch]
+```
+
+- **list-level 自動反復**が効くため、列のリストを渡せば結果もリストで返る(§4.1)
+- **列名による対応付けはされない**。AutoCAD コマンド側の別名解決(`outer_d_mm` / `外径` / `D` を自動判別)は Core の各インポータが行うもので、この経路では列の位置を自分で指定する。CSV の列順を変えるとグラフが壊れる
+- `Data.ImportCSV` が値を文字列で返す場合は `String.ToNumber` を挟む
+- **単位変換も行われない**。`CalcSection` の `D_mm` は mm 呼称なので前壁 CSV の `800` をそのまま渡せるが、タイロッド帳票 CSV は全て m のため他ノードと単位が合わない
+
+いずれの経路も**文字コードは UTF-8 のみ**(Excel からは「CSV UTF-8 形式で保存」)。柱状図 CSV は 1 行でも不備があれば計算全体を止める(帳票 CSV の「1 行の不備で全体を止めない」方針とは逆。§4.4)。
+
+> **未検証**: 本節のグラフ配線は実機の Dynamo で動作確認していない(§4.9 冒頭と同じ制約)。検証済みなのは柱状図 CSV のパースと 10 出力ポートの値(Core 層を直接呼び出し、例 4 の表と一致)、および帳票 CSV 5 ファイルのパースと部材間整合まで。`File Path` / `Data.ImportCSV` / `List.Transpose` の挙動と、`[MultiReturn]` の日本語キーの表示は実機確認が必要。
+
 ---
 
 ## 5. 入力パラメータ
@@ -738,6 +802,25 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 
 許容誤差は既定で比率 1%(`QuantityReconciliation.DefaultToleranceRatio`)。帳票値が 0 の項目は絶対差で判定する。
 
+**サンプル CSV**([`docs/samples/`](docs/samples/))
+
+各インポータ(`FrontWallCsvImporter` / `TieRodCsvImporter` / `AnchorPileCsvImporter`)を直接呼び出してエラー 0 件を確認済み。前壁 → タイロッド → 控え杭を**通しで使える組合せ**にしてある(前壁 D=800mm・LT75 → 有効幅 B=875.2mm、杭頭標高 +3.0m > タイロッド軸心標高 Z_tr=2.5m)。
+
+| ファイル | 用途 | 検証結果 |
+|---|---|---|
+| `frontwall_import_minimal.csv` | 前壁・必須 4 列のみ。総本数/施工順位を省略し自動採番させる例 | 10 行、施設延長 8.752m、継手 1本目 +Y のみ / 2〜9本目 両側 / 10本目 −Y のみ |
+| `frontwall_import_full.csv` | 前壁・全 10 列明示。肉厚・全長・杭先端標高が途中で変わる遷移区間の例 | 10 行、杭頭標高を +3.0m で揃え、先端を −18/−19/−20m と変化させる |
+| `frontwall_import_spec.csv` | 前壁・「規格」列フォールバック(`φ800×12 L=21.0m LT75`) | 5 行。**杭先端標高だけは規格列から抽出できず別列が必須** |
+| `tierod_import.csv` | タイロッド・必須 16 列 + 列挙型 3 列 | 3 組、Y=0 / 2.6256 / 5.2512m(取付間隔 = B×3)、前壁整合 OK |
+| `anchorpile_import.csv` | 控え杭・必須 6 列 + 任意 3 列 | 3 本、杭面間浄距離 8.800m、前壁整合 OK |
+| `boringlog.csv` | 柱状図(§5.6。Dynamo `CalcWeightedN` 用) | 5 層、出力は §4.9 例 4 の表と一致 |
+
+**単位が部材ごとに異なる点に注意**。前壁・控え杭は外径・肉厚のみ mm で他は m、**タイロッドは全て m**(`rod_d` は `48` ではなく `0.048`)。タイロッドで mm 値を書くと `TieRodParameters.Validate` が「単位はメートルです(mm 値の混入に注意)」で停止する。
+
+タイロッドの `pile_d` / `pile_pitch` は前壁の外径 / 有効幅 B と一致しなければ `CrossMemberValidator` で行ごと弾かれる(誤差許容 1mm)。`tie_spacing` は `pile_pitch` の整数倍であること。
+
+> **控え杭の一括生成は全行が同じ Y に重なる。** `AnchorInput` に Y フィールドが無く、`AnchorAlignment.Compute` が選択した前壁の Y をそのまま使うため(`AnchorAlignment.cs`)。`anchorpile_import.csv` の 3 行も杭先端座標が 3 本とも同一になる。CSV 側で Y を与える手段は現状無い(§9.2 の 7)。
+
 ### 5.6 柱状図 CSV(加重平均N値の算出、`SpqwNodes.CalcWeightedN`)
 
 前壁・バイブロ単独・控え杭の各打設歩掛積算コマンドが個別に尋ねる `nAvg`(加重平均N値)を、柱状図データから算出するための入力形式。1 行 = 1 層。
@@ -764,6 +847,8 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 ```
 
 CSV の行順は問わない(標高上端の降順に自動で並べ替えたうえで、地表からの連続性を検証する)。
+
+上記の例をそのまま [`docs/samples/boringlog.csv`](docs/samples/boringlog.csv) に置いてある(出力は §4.9 例 4 の表)。Dynamo からの使い方は §4.10 を参照。
 
 ---
 
@@ -959,7 +1044,10 @@ AutoCAD コマンド(NETLOAD)と Dynamo ノード(Import Library)は独立した
 ├── scripts/
 │   ├── port-from-legacy.sh              007/008 からの冪等移植
 │   └── verify-dll-versions.ps1          参照 DLL バージョン実測(CLAUDE.PRIVATE.md §9)
-└── docs/implementation-plan.md          設計決定 1〜11・フェーズ計画・実機検証項目(§13.5)
+└── docs/
+    ├── implementation-plan.md           設計決定 1〜11・フェーズ計画・実機検証項目(§13.5)
+    ├── features.html                    機能概要(図表中心)
+    └── samples/                          帳票 CSV 5 種 + 柱状図 CSV(§5.5・§5.6)
 ```
 
 ### レガシー 3 リポジトリからの移植
@@ -1025,7 +1113,7 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 | 4 | ~~前壁の壁一括生成が無い~~ → **`SPQW_FRONTWALL_ImportCsv` で解消**(帳票 CSV から一括生成)。ただし**直線配置のみ**を想定しており、平面線形が曲がる・折れる岸壁には対応しない。各矢板の Y は「1 つ前の矢板自身の有効幅」だけ加算して求めるため、外径・継手が変化する遷移区間では概算になる(§9.1 の 5 とあわせて実データでの検証が必要)。手動で 1 本ずつ配置したい場合は従来どおり `SPQW_FRONTWALL_Create` を使う。 |
 | 5 | **工種体系へのマッピングは未実装**。`SPQW_QUAYWALL_Estimate` は鋼材質量の集計までで、『港湾工事工種体系ツリー.md』のレベル体系への対応付けは行っていない。 |
 | 6 | ~~打設歩掛の Dynamo ノードは未実装~~ → **§4.5〜4.8 の 4 ノードで解消**(前壁の打撃/バイブロ単独/ジェット併用、控え杭の打撃工法)。ただし D/t/L 等の寸法チェックは行わないため、AutoCAD コマンド側(範囲チェックあり)より入力ミスに気付きにくい点に注意。 |
-| 7 | **タイロッド・控え杭の帳票 CSV は平面位置 Y が必須列**。前壁 CSV のような自動配置(有効幅の累積)は行わない。タイロッド取付間隔からの自動採番も未実装のため、Y は帳票側で明示すること。 |
+| 7 | **タイロッドの帳票 CSV は平面位置 Y が必須列**。前壁 CSV のような自動配置(有効幅の累積)は行わない。タイロッド取付間隔からの自動採番も未実装のため、Y は帳票側で明示すること。**控え杭は逆に Y を指定できない** — `AnchorInput` に Y フィールドが無く、`AnchorAlignment.Compute` が選択した前壁の Y をそのまま使うため、`SPQW_ANCHORPILE_ImportCsv` で N 行取り込むと N 本が同一座標に重なる(一括生成として機能していない)。対処方針は未決(`AnchorInput` への Y 追加 / 取付間隔からの自動配置 / 制約として明記、のいずれか)。 |
 | 8 | **控え杭の帳票 CSV は前壁との整合チェックを取り込み時に行えない**。外径・肉厚・全長の単体範囲チェックのみを取り込み時に行い、前壁との span 干渉チェック(`AnchorAlignment.Validate`)は前壁選択後に `SPQW_ANCHORPILE_ImportCsv` 内で行う(§5.5 に記載)。 |
 | 9 | **控え杭の打設歩掛は陸上打設のみ**(`SPQW_ANCHORPILE_Estimate`)。4節 3-4.6 には海上打設の船団構成・労務編成もあるが未実装。前壁が `_Estimate`→`_VibroEstimate`→`_VibroJetEstimate` と段階的に増えたのと同様、海上版は追加できる。 |
 | 10 | **ジェット併用のメイン船(クレーン付台船・起重機船)はトン数ランクまで選定していない**。`SPQW_FRONTWALL_VibroJetEstimate` は必要吊上げ荷重 Cf(=(Wv+Wp)×6)の数値を示すのみで、バイブロ単独(16節 3-2)のように「◯◯t吊」という具体的なランクへ変換する表は 3-1 節側に見当たらず未実装。付帯船舶(台船・引船・揚錨船・潜水士船)は両工法とも実装済み。 |
@@ -1055,6 +1143,13 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 ## 10. 旧版 README からの変更点
 
 それ以前の機能追加履歴(帳票 CSV 取り込み・付帯船舶・控え杭打設歩掛・柱状図解析ノード・Dynamo 節全面改訂の経緯)は git log と [`docs/implementation-plan.md`](docs/implementation-plan.md) の変更履歴を参照。
+
+**サンプル CSV とドキュメントの追加**(コード変更なし)
+
+- [`docs/samples/`](docs/samples/) に帳票 CSV 5 種 + 柱状図 CSV を追加(§5.5 の表)。各インポータを直接呼び出してエラー 0 件を確認済みで、前壁 → タイロッド → 控え杭を通しで使える組合せにしてある。
+- §4.10「CSV を Dynamo から使う」を新設。ノードが直接読める CSV は柱状図 CSV だけであること、帳票 CSV は Dynamo 標準ノード経由になることを明記した。
+- §9.2 の 7 を実装に合わせて訂正。旧記述は「タイロッド・控え杭とも Y が必須列」としていたが、**控え杭には Y 列が存在せず、一括生成すると全行が同一座標に重なる**(`AnchorInput` に Y フィールドが無い)。サンプル作成時に実際に動かして判明した。対処方針は未決。
+- NETLOAD / Import Library による登録手順を §7 に追加。
 
 本版は次の 2 つの機能追加と、それらへの批判的レビュー(別セッション)での指摘反映を含む。
 
