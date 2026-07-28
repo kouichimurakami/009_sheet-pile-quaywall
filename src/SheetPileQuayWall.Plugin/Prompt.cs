@@ -10,6 +10,16 @@ namespace SheetPileQuayWall.Plugin
 {
     public static class Prompt
     {
+        // AutoCAD 2025 SDK では PromptOptions 系の AllowNone が、型によって
+        // 外部から見えない中間基底クラス経由でしか継承されず CS0122 になることがある
+        // (2026-07-28 実機で確認。PromptDoubleOptions 等は public な再公開があるが
+        // 一部の型に無い)。プロパティ自体は必ず存在するため、型を問わずリフレクションで
+        // 設定する。
+        private static void SetAllowNone(object opt)
+        {
+            opt.GetType().GetProperty("AllowNone").SetValue(opt, true);
+        }
+
         // 実数入力。範囲外は再入力を促さずエラー終了する(自動補正しない)。
         public static bool TryAskDouble(
             Autodesk.AutoCAD.EditorInput.Editor ed, string message,
@@ -21,7 +31,7 @@ namespace SheetPileQuayWall.Plugin
                 new Autodesk.AutoCAD.EditorInput.PromptDoubleOptions(message);
             opt.DefaultValue = defaultValue;
             opt.UseDefaultValue = true;
-            opt.AllowNone = true;
+            SetAllowNone(opt);
 
             Autodesk.AutoCAD.EditorInput.PromptDoubleResult res = ed.GetDouble(opt);
             if (res.Status != Autodesk.AutoCAD.EditorInput.PromptStatus.OK &&
@@ -68,7 +78,7 @@ namespace SheetPileQuayWall.Plugin
                 new Autodesk.AutoCAD.EditorInput.PromptIntegerOptions(message);
             opt.DefaultValue = defaultValue;
             opt.UseDefaultValue = true;
-            opt.AllowNone = true;
+            SetAllowNone(opt);
             opt.LowerLimit = min;
             opt.UpperLimit = max;
 
@@ -98,7 +108,7 @@ namespace SheetPileQuayWall.Plugin
                 opt.Keywords.Add(keywords[i]);
             }
             opt.Keywords.Default = defaultKeyword;
-            opt.AllowNone = true;
+            SetAllowNone(opt);
 
             Autodesk.AutoCAD.EditorInput.PromptResult res = ed.GetKeywords(opt);
             if (res.Status != Autodesk.AutoCAD.EditorInput.PromptStatus.OK &&
@@ -148,7 +158,7 @@ namespace SheetPileQuayWall.Plugin
             opt.AllowSpaces = true;
             opt.DefaultValue = defaultValue;
             opt.UseDefaultValue = !string.IsNullOrEmpty(defaultValue);
-            opt.AllowNone = true;
+            SetAllowNone(opt);
 
             Autodesk.AutoCAD.EditorInput.PromptResult res = ed.GetString(opt);
             if (res.Status != Autodesk.AutoCAD.EditorInput.PromptStatus.OK &&
