@@ -20,8 +20,15 @@ namespace SheetPileQuayWall.Plugin.Commands
     {
         public const string LayerName = "前壁鋼管矢板";
 
+        // SPQW_FRONTWALL_Create の施設全長の既定値 [m]
+        private const double DefaultWallLength_m = 10.000;
+
         // ════════════════════════════════════════════════════════════════════
-        // SPQW_FRONTWALL_Create: 対話入力 → Solid3d 生成 → XData 記録
+        // SPQW_FRONTWALL_Create: 対話入力 → 施設全長と有効幅から本数を自動算出 →
+        //                        始点から +Y 方向へ壁を一括生成 → XData 記録
+        //
+        // 本数は切り上げ (Core WallLayout)。施工順位は 1 始まりで自動採番するため、
+        // 継手の要否・雌雄は PieceAssignment が自動判定する。
         // ════════════════════════════════════════════════════════════════════
         [Autodesk.AutoCAD.Runtime.CommandMethod("SPQW_FRONTWALL_Create")]
         public static void Create()
@@ -35,16 +42,45 @@ namespace SheetPileQuayWall.Plugin.Commands
             SheetPileQuayWall.Plugin.XData.FrontWallRecord record =
                 new SheetPileQuayWall.Plugin.XData.FrontWallRecord();
 
-            if (!PromptRecord(ed, record, askPlanPoint: true))
+            int pieceCount;
+            double effectiveWidth_m;
+            double wallLength_m;
+            if (!PromptWallRecord(ed, record, out pieceCount, out effectiveWidth_m,
+                out wallLength_m))
             {
                 return;
             }
 
-            BuildAndAppend(db, ed, record, replaceId: null);
+            double startY = record.TipPoint.Y;
 
-            PrintSummary(ed, record);
+            using (Autodesk.AutoCAD.DatabaseServices.Transaction tr =
+                db.TransactionManager.StartTransaction())
+            {
+                SheetPileQuayWall.Plugin.XData.XDataStore.EnsureRegApp(
+                    tr, db, SheetPileQuayWall.Plugin.XData.FrontWallRecord.RegAppName);
+                SheetPileQuayWall.Plugin.DrawingHelper.EnsureLayer(db, tr, LayerName, 8);
+
+                for (int i = 1; i <= pieceCount; i++)
+                {
+                    record.PieceIndex = i;
+                    record.PieceCount = pieceCount;
+                    record.TipPoint = SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.TipPoint(
+                        record.TipPoint.X,
+                        SheetPileQuayWall.Core.FrontWall.WallLayout.PositionY(
+                            startY, i, effectiveWidth_m),
+                        record.TipPoint.Z);
+
+                    SheetPileQuayWall.Plugin.DrawingHelper.AppendSolid(
+                        db, tr, BuildSolid(record), LayerName, record.ColorIdx,
+                        record.ToBuffer());
+                }
+
+                tr.Commit();
+            }
+
+            PrintWallSummary(ed, record, pieceCount, effectiveWidth_m, wallLength_m, startY);
             ed.WriteMessage(
-                $"\nパラメータを XData (RegApp: " +
+                $"\n{pieceCount} 本を生成し、パラメータを XData (RegApp: " +
                 $"{SheetPileQuayWall.Plugin.XData.FrontWallRecord.RegAppName}) に保存しました。");
             ed.WriteMessage("\nSPQW_FRONTWALL_Create 完了。");
         }
@@ -389,12 +425,100 @@ namespace SheetPileQuayWall.Plugin.Commands
         }
 
         // ────────────────────────────────────────────────────────────────────
-        // 入力(Enter で record の現在値を採用)。askPlanPoint=false で平面位置を保持
+        // _Create 用の入力。総本数・施工順位の代わりに施設全長と有効幅を尋ね、
+        // 本数を切り上げで自動算出する。平面位置は 1 本目(始点)のみピックする。
         // ────────────────────────────────────────────────────────────────────
-        private static bool PromptRecord(
+        private static bool PromptWallRecord(
             Autodesk.AutoCAD.EditorInput.Editor ed,
             SheetPileQuayWall.Plugin.XData.FrontWallRecord record,
-            bool askPlanPoint)
+            out int pieceCount, out double effectiveWidth_m, out double wallLength_m)
+        {
+            pieceCount = 0;
+            effectiveWidth_m = 0.0;
+            wallLength_m = 0.0;
+
+            if (!PromptSpec(ed, record))
+            {
+                return false;
+            }
+
+            if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
+                ed, $"\n施設全長 (m, +Y 方向) <{DefaultWallLength_m:F3}>: ",
+                DefaultWallLength_m,
+                SheetPileQuayWall.Core.FrontWall.WallLayout.WallLength_Min_m,
+                SheetPileQuayWall.Core.FrontWall.WallLayout.WallLength_Max_m,
+                out wallLength_m))
+            {
+                return false;
+            }
+
+            // 既定値は外径・継手形式から算出した有効幅。Enter で採用すれば
+            // タイロッドのピッチ照合 (CrossMemberValidator) を確実に通せる
+            double autoWidth_m = SheetPileQuayWall.Core.FrontWall.JointParameters.EffectiveWidth(
+                record.OuterDm,
+                SheetPileQuayWall.Core.FrontWall.JointParameters.FromCode(record.JointCode));
+
+            if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
+                ed, $"\n鋼管矢板 有効幅 B (m, 継手考慮) <{autoWidth_m:F4}>: ",
+                autoWidth_m,
+                SheetPileQuayWall.Core.FrontWall.WallLayout.Width_Min_m,
+                SheetPileQuayWall.Core.FrontWall.WallLayout.Width_Max_m,
+                out effectiveWidth_m))
+            {
+                return false;
+            }
+
+            // 入力幅が継手形式からの算出値と食い違う場合は警告のみ(入力値を優先)。
+            // タイロッドは EffectiveWidth と照合するため、この状態では
+            // SPQW_TIEROD_Create のピッチ照合が通らなくなる
+            if (SheetPileQuayWall.Core.FrontWall.WallLayout.WidthDeviation(
+                    effectiveWidth_m, record.OuterDm,
+                    SheetPileQuayWall.Core.FrontWall.JointParameters.FromCode(record.JointCode))
+                > SheetPileQuayWall.Core.FrontWall.WallLayout.Tol_m)
+            {
+                ed.WriteMessage(
+                    $"\n警告: 入力した有効幅 {effectiveWidth_m:F4}m は " +
+                    $"D={record.OuterDm * 1000:F0}mm・継手 {record.JointCode} からの算出値 " +
+                    $"{autoWidth_m:F4}m と {System.Math.Abs(effectiveWidth_m - autoWidth_m) * 1000:F1}mm " +
+                    "違います。入力値で配置しますが、SPQW_TIEROD_Create の矢板ピッチ照合" +
+                    $"(算出値 {autoWidth_m:F4}m と一致必須)は通らなくなります。");
+            }
+
+            if (!PromptColorAndTip(ed, record))
+            {
+                return false;
+            }
+
+            double planX = record.TipPoint.X;
+            double planY = record.TipPoint.Y;
+            if (!SheetPileQuayWall.Plugin.Prompt.TryAskPlanPoint(
+                ed, "\n始点 (1 本目の杭中心) を指定 (Z は使用せず、標高は入力値による): ",
+                out planX, out planY))
+            {
+                return false;
+            }
+            record.TipPoint = SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.TipPoint(
+                planX, planY, record.TipPoint.Z);
+
+            // ── 整合性チェック(不一致はエラー停止、自動補正しない)────────────
+            if (!SheetPileQuayWall.Plugin.Prompt.Report(ed,
+                SheetPileQuayWall.Core.FrontWall.WallLayout.Validate(wallLength_m, effectiveWidth_m)))
+            {
+                return false;
+            }
+
+            pieceCount = SheetPileQuayWall.Core.FrontWall.WallLayout.PieceCountFor(
+                wallLength_m, effectiveWidth_m);
+            return true;
+        }
+
+        // ────────────────────────────────────────────────────────────────────
+        // 部材 1 本の諸元(_Create の壁一括生成・_Action の単体再生成で共通)。
+        // 検証を通ったものだけ record へ書き込む。
+        // ────────────────────────────────────────────────────────────────────
+        private static bool PromptSpec(
+            Autodesk.AutoCAD.EditorInput.Editor ed,
+            SheetPileQuayWall.Plugin.XData.FrontWallRecord record)
         {
             // 外径・肉厚は mm 呼称で入力し、直後に m へ変換する(決定7)
             double outerD_m;
@@ -449,25 +573,36 @@ namespace SheetPileQuayWall.Plugin.Commands
                 return false;
             }
 
-            int pieceCount;
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskInt(
-                ed, $"\n総本数 (壁全体、本) <{record.PieceCount}>: ",
-                record.PieceCount, 1,
-                SheetPileQuayWall.Core.FrontWall.PieceAssignment.PieceCount_Max,
-                out pieceCount))
+            if (!SheetPileQuayWall.Plugin.Prompt.Report(ed,
+                SheetPileQuayWall.Core.FrontWall.InputValidator.ValidateD(outerD_m)))
+            {
+                return false;
+            }
+            if (!SheetPileQuayWall.Plugin.Prompt.Report(ed,
+                SheetPileQuayWall.Core.FrontWall.InputValidator.ValidateT(wallT_m, outerD_m)))
+            {
+                return false;
+            }
+            if (!SheetPileQuayWall.Plugin.Prompt.Report(ed,
+                SheetPileQuayWall.Core.FrontWall.InputValidator.ValidateL(length_m)))
             {
                 return false;
             }
 
-            int pieceIndex;
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskInt(
-                ed, $"\n施工順位 (1〜{pieceCount} 本目、+Y 方向へ打設) <{record.PieceIndex}>: ",
-                record.PieceIndex > pieceCount ? 1 : record.PieceIndex, 1, pieceCount,
-                out pieceIndex))
-            {
-                return false;
-            }
+            record.OuterDm = outerD_m;
+            record.WallTm = wallT_m;
+            record.LengthM = length_m;
+            record.JointCode = jointCode;
+            record.Grade = grade;
+            record.InclDeg = inclDeg;
+            return true;
+        }
 
+        // 色と杭先端標高(_Create / _Action で共通。標高は record.TipPoint へ反映する)
+        private static bool PromptColorAndTip(
+            Autodesk.AutoCAD.EditorInput.Editor ed,
+            SheetPileQuayWall.Plugin.XData.FrontWallRecord record)
+        {
             int colorIdx;
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskInt(
                 ed, $"\n本管の色 (ACI 1〜255) <{record.ColorIdx}>: ",
@@ -487,52 +622,73 @@ namespace SheetPileQuayWall.Plugin.Commands
                 return false;
             }
 
-            double planX = record.TipPoint.X;
-            double planY = record.TipPoint.Y;
+            record.ColorIdx = colorIdx;
+            record.TipPoint = SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.TipPoint(
+                record.TipPoint.X, record.TipPoint.Y, tipElev_m);
+            return true;
+        }
+
+        // ────────────────────────────────────────────────────────────────────
+        // _Action 用の入力(Enter で record の現在値を採用)。
+        // 単体再生成のため総本数・施工順位を明示入力し、平面位置は保持する。
+        // ────────────────────────────────────────────────────────────────────
+        private static bool PromptRecord(
+            Autodesk.AutoCAD.EditorInput.Editor ed,
+            SheetPileQuayWall.Plugin.XData.FrontWallRecord record,
+            bool askPlanPoint)
+        {
+            if (!PromptSpec(ed, record))
+            {
+                return false;
+            }
+
+            int pieceCount;
+            if (!SheetPileQuayWall.Plugin.Prompt.TryAskInt(
+                ed, $"\n総本数 (壁全体、本) <{record.PieceCount}>: ",
+                record.PieceCount, 1,
+                SheetPileQuayWall.Core.FrontWall.PieceAssignment.PieceCount_Max,
+                out pieceCount))
+            {
+                return false;
+            }
+
+            int pieceIndex;
+            if (!SheetPileQuayWall.Plugin.Prompt.TryAskInt(
+                ed, $"\n施工順位 (1〜{pieceCount} 本目、+Y 方向へ打設) <{record.PieceIndex}>: ",
+                record.PieceIndex > pieceCount ? 1 : record.PieceIndex, 1, pieceCount,
+                out pieceIndex))
+            {
+                return false;
+            }
+
+            if (!PromptColorAndTip(ed, record))
+            {
+                return false;
+            }
+
             if (askPlanPoint)
             {
                 // 平面位置のみピックする。クリック点の Z は使わない(§2.2)
+                double planX, planY;
                 if (!SheetPileQuayWall.Plugin.Prompt.TryAskPlanPoint(
                     ed, "\n平面位置 (杭中心) を指定 (Z は使用せず、標高は入力値による): ",
                     out planX, out planY))
                 {
                     return false;
                 }
+                record.TipPoint = SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.TipPoint(
+                    planX, planY, record.TipPoint.Z);
             }
 
             // ── 整合性チェック(不一致はエラー停止、自動補正しない)────────────
-            if (!SheetPileQuayWall.Plugin.Prompt.Report(ed,
-                SheetPileQuayWall.Core.FrontWall.InputValidator.ValidateD(outerD_m)))
-            {
-                return false;
-            }
-            if (!SheetPileQuayWall.Plugin.Prompt.Report(ed,
-                SheetPileQuayWall.Core.FrontWall.InputValidator.ValidateT(wallT_m, outerD_m)))
-            {
-                return false;
-            }
-            if (!SheetPileQuayWall.Plugin.Prompt.Report(ed,
-                SheetPileQuayWall.Core.FrontWall.InputValidator.ValidateL(length_m)))
-            {
-                return false;
-            }
             if (!SheetPileQuayWall.Plugin.Prompt.Report(ed,
                 SheetPileQuayWall.Core.FrontWall.PieceAssignment.Validate(pieceIndex, pieceCount)))
             {
                 return false;
             }
 
-            record.OuterDm = outerD_m;
-            record.WallTm = wallT_m;
-            record.LengthM = length_m;
-            record.JointCode = jointCode;
-            record.Grade = grade;
-            record.InclDeg = inclDeg;
             record.PieceCount = pieceCount;
             record.PieceIndex = pieceIndex;
-            record.ColorIdx = colorIdx;
-            record.TipPoint = SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.TipPoint(
-                planX, planY, tipElev_m);
             return true;
         }
 
@@ -641,6 +797,29 @@ namespace SheetPileQuayWall.Plugin.Commands
                 tr.Commit();
             }
             return record;
+        }
+
+        // 壁一括生成の結果(本数・実延長・始点終点)。1 本分の諸元は PrintSummary が出す。
+        private static void PrintWallSummary(
+            Autodesk.AutoCAD.EditorInput.Editor ed,
+            SheetPileQuayWall.Plugin.XData.FrontWallRecord record,
+            int pieceCount, double effectiveWidth_m, double wallLength_m, double startY_m)
+        {
+            double actual_m = SheetPileQuayWall.Core.FrontWall.WallLayout.ActualLength(
+                pieceCount, effectiveWidth_m);
+            double lastY_m = SheetPileQuayWall.Core.FrontWall.WallLayout.PositionY(
+                startY_m, pieceCount, effectiveWidth_m);
+
+            ed.WriteMessage("\n=== 壁一括生成 ===");
+            ed.WriteMessage($"\n  施設全長 (入力)  : {wallLength_m,10:F3} m");
+            ed.WriteMessage($"\n  有効幅 B         : {effectiveWidth_m,10:F4} m");
+            ed.WriteMessage($"\n  本数 (切り上げ)  : {pieceCount,10} 本");
+            ed.WriteMessage($"\n  実延長 (本数×B)  : {actual_m,10:F3} m " +
+                $"(施設全長との差 {actual_m - wallLength_m:+0.000;-0.000} m)");
+            ed.WriteMessage($"\n  始点 Y (1 本目)  : {startY_m,10:F4} m");
+            ed.WriteMessage($"\n  終点 Y ({pieceCount} 本目) : {lastY_m,10:F4} m");
+
+            PrintSummary(ed, record);
         }
 
         private static void PrintSummary(
