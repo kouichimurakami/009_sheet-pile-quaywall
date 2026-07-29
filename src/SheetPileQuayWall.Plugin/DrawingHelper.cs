@@ -160,6 +160,94 @@ namespace SheetPileQuayWall.Plugin
             return record;
         }
 
+        // タイロッドの選択を求め、その XData を返す。選択中止・XData 無しの場合は null。
+        // 控え杭の配置間隔・本数・タイロッド軸心標高をタイロッドから自動取得するために使う
+        // (2026-07-29、SelectFrontWall と同じパターン)。
+        public static SheetPileQuayWall.Plugin.XData.TieRodRecord? SelectTieRod(
+            Autodesk.AutoCAD.EditorInput.Editor ed,
+            Autodesk.AutoCAD.DatabaseServices.Database db,
+            string message)
+        {
+            Autodesk.AutoCAD.EditorInput.PromptEntityResult res = SelectSolid(ed, message);
+            if (res.Status != Autodesk.AutoCAD.EditorInput.PromptStatus.OK)
+            {
+                return null;
+            }
+
+            SheetPileQuayWall.Plugin.XData.TieRodRecord? record = null;
+            using (Autodesk.AutoCAD.DatabaseServices.Transaction tr =
+                db.TransactionManager.StartTransaction())
+            {
+                Autodesk.AutoCAD.DatabaseServices.Solid3d? solid =
+                    tr.GetObject(res.ObjectId,
+                        Autodesk.AutoCAD.DatabaseServices.OpenMode.ForRead)
+                    as Autodesk.AutoCAD.DatabaseServices.Solid3d;
+                if (solid != null)
+                {
+                    record = SheetPileQuayWall.Plugin.XData.TieRodRecord.Read(solid);
+                }
+                tr.Commit();
+            }
+
+            if (record == null)
+            {
+                ed.WriteMessage(
+                    $"\nエラー: 選択したソリッドにタイロッドの XData " +
+                    $"(RegApp: {SheetPileQuayWall.Plugin.XData.TieRodRecord.RegAppName}) " +
+                    $"がありません。SPQW_TIEROD_Create で作成したソリッドを選択してください。");
+                return null;
+            }
+
+            return record;
+        }
+
+        // モデル空間内の SPQW_FRONTWALL XData を持つ全 Solid3d を走査し、杭中心 Y の
+        // 最小値を返す(控え杭の配置開始位置を壁の 1 本目に自動整列させるため。
+        // 2026-07-29)。該当が無ければ null。
+        public static double? MinFrontWallY(
+            Autodesk.AutoCAD.DatabaseServices.Database db)
+        {
+            double? min = null;
+            using (Autodesk.AutoCAD.DatabaseServices.Transaction tr =
+                db.TransactionManager.StartTransaction())
+            {
+                Autodesk.AutoCAD.DatabaseServices.BlockTable bt =
+                    (Autodesk.AutoCAD.DatabaseServices.BlockTable)tr.GetObject(
+                        db.BlockTableId,
+                        Autodesk.AutoCAD.DatabaseServices.OpenMode.ForRead);
+                Autodesk.AutoCAD.DatabaseServices.BlockTableRecord btr =
+                    (Autodesk.AutoCAD.DatabaseServices.BlockTableRecord)tr.GetObject(
+                        bt[Autodesk.AutoCAD.DatabaseServices.BlockTableRecord.ModelSpace],
+                        Autodesk.AutoCAD.DatabaseServices.OpenMode.ForRead);
+
+                foreach (Autodesk.AutoCAD.DatabaseServices.ObjectId id in btr)
+                {
+                    Autodesk.AutoCAD.DatabaseServices.Solid3d? solid =
+                        tr.GetObject(id, Autodesk.AutoCAD.DatabaseServices.OpenMode.ForRead)
+                        as Autodesk.AutoCAD.DatabaseServices.Solid3d;
+                    if (solid == null)
+                    {
+                        continue;
+                    }
+
+                    SheetPileQuayWall.Plugin.XData.FrontWallRecord? record =
+                        SheetPileQuayWall.Plugin.XData.FrontWallRecord.Read(solid);
+                    if (record == null)
+                    {
+                        continue;
+                    }
+
+                    if (min == null || record.TipPoint.Y < min.Value)
+                    {
+                        min = record.TipPoint.Y;
+                    }
+                }
+
+                tr.Commit();
+            }
+            return min;
+        }
+
         // 既存ソリッドを消去する(_Action の再生成前)。
         public static void EraseSolid(
             Autodesk.AutoCAD.DatabaseServices.Transaction tr,

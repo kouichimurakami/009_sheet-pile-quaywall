@@ -17,11 +17,6 @@ namespace SheetPileQuayWall.Plugin.Commands
     {
         public const string LayerName = "控え杭";
 
-        // SPQW_ANCHORPILE_Create の一括生成の既定値
-        private const int DefaultEveryNPiles = 3;
-        private const int DefaultPileCount = 4;
-        private const int MaxPileCount = 200;
-
         // ════════════════════════════════════════════════════════════════════
         // SPQW_ANCHORPILE_Create: 前壁選択 → タイロッド軸線に整列した控え杭を生成
         // ════════════════════════════════════════════════════════════════════
@@ -44,52 +39,41 @@ namespace SheetPileQuayWall.Plugin.Commands
                 return;
             }
 
+            // 配置間隔・本数・タイロッド軸心標高は、代表となるタイロッドから自動取得する
+            // (2026-07-29。従来は前壁の有効幅と「矢板何本ごと」の手入力から導出していたが、
+            // タイロッド自身が既に配置間隔・本数・軸心標高を持っているため、それをそのまま使う)
+            SheetPileQuayWall.Plugin.XData.TieRodRecord? tieRod =
+                SheetPileQuayWall.Plugin.DrawingHelper.SelectTieRod(
+                    ed, db, "\n配置間隔・本数の基準とするタイロッド (SPQW_TIEROD) を選択: ");
+            if (tieRod == null)
+            {
+                return;
+            }
+
+            double spacing_m = tieRod.Parameters.TieSpacing;
+            int pileCount = tieRod.Parameters.TieCount;
+
             SheetPileQuayWall.Plugin.XData.AnchorPileRecord record =
                 new SheetPileQuayWall.Plugin.XData.AnchorPileRecord();
             record.FrontHandle = frontHandle;
             record.HasPositionY = true;
             // 杭先端標高の既定値は前壁に合わせる(移植元 006 と同じ)
             record.Input.TipElevM = front.TipPoint.Z;
-            // 始点は選択した前壁の Y。以降は配置間隔ぶんずつ +Y へ進む
-            record.Input.PositionY = front.TipPoint.Y;
+            record.Input.TieElevM = tieRod.Parameters.TieElevation;
+
+            // 始点は図面内の前壁のうち杭中心 Y が最小のもの(壁の 1 本目)に自動整列する
+            // (2026-07-29。従来は選択した前壁自身の Y をそのまま使っており、壁の途中の
+            // 矢板を選ぶと控え杭の並びが 1 本目からずれていた)
+            double? minFrontY = SheetPileQuayWall.Plugin.DrawingHelper.MinFrontWallY(db);
+            record.Input.PositionY = minFrontY ?? front.TipPoint.Y;
+
+            ed.WriteMessage(
+                $"\n  タイロッドから取得: 軸心標高 Z_tr {record.Input.TieElevM:F3} m / " +
+                $"配置間隔 {spacing_m:F4} m ({pileCount} 組)");
+            ed.WriteMessage(
+                $"\n  位置 Y 始点(壁の 1 本目に自動整列): {record.Input.PositionY:F4} m");
 
             if (!PromptRecord(ed, record, front))
-            {
-                return;
-            }
-
-            // 配置間隔・本数(タイロッドと同じく「矢板何本ごと」で受ける)。
-            // ピッチは前壁が壁一括生成で実際に使った有効幅 B を優先する
-            // (TieRodCommands.PromptParameters と同じ理由。2026-07-29 発見)。
-            double pilePitch_m = front.ToRef().ResolveEffectiveWidth();
-            ed.WriteMessage(
-                $"\n  前壁から取得: 矢板ピッチ (有効幅 B) {pilePitch_m:F4} m");
-
-            int everyNPiles;
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskInt(
-                ed, $"\n控え杭 配置間隔 (矢板何本ごと) <{DefaultEveryNPiles}>: ",
-                DefaultEveryNPiles,
-                SheetPileQuayWall.Core.TieRod.TieRodPitch.EveryNPiles_Min,
-                SheetPileQuayWall.Core.TieRod.TieRodPitch.EveryNPiles_Max,
-                out everyNPiles))
-            {
-                return;
-            }
-            if (!SheetPileQuayWall.Plugin.Prompt.Report(ed,
-                SheetPileQuayWall.Core.TieRod.TieRodPitch.Validate(pilePitch_m, everyNPiles)))
-            {
-                return;
-            }
-
-            double spacing_m = SheetPileQuayWall.Core.TieRod.TieRodPitch.SpacingFor(
-                pilePitch_m, everyNPiles);
-            ed.WriteMessage(
-                $"\n  → 配置間隔 = {pilePitch_m:F4} m × {everyNPiles} 本 = {spacing_m:F4} m");
-
-            int pileCount;
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskInt(
-                ed, $"\n控え杭 本数 (本) <{DefaultPileCount}>: ",
-                DefaultPileCount, 1, MaxPileCount, out pileCount))
             {
                 return;
             }
@@ -107,7 +91,7 @@ namespace SheetPileQuayWall.Plugin.Commands
 
             ed.WriteMessage("\n=== 控え杭 一括生成 ===");
             ed.WriteMessage($"\n  本数          : {pileCount,10} 本");
-            ed.WriteMessage($"\n  配置間隔      : {spacing_m,10:F4} m ({everyNPiles} 本ごと)");
+            ed.WriteMessage($"\n  配置間隔      : {spacing_m,10:F4} m (タイロッドから取得)");
             ed.WriteMessage($"\n  始点 Y (1 本目): {startY,10:F4} m");
             ed.WriteMessage($"\n  終点 Y ({pileCount} 本目): " +
                 $"{startY + (pileCount - 1) * spacing_m,10:F4} m");
@@ -322,23 +306,26 @@ namespace SheetPileQuayWall.Plugin.Commands
             }
             double spanM = value;
 
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
-                ed, $"\nタイロッド軸心標高 Z_tr (m, D.L. 基準) <{a.TieElevM:F3}>: ",
-                a.TieElevM, -5.0, 10.0, out value))
-            {
-                return false;
-            }
-            double tieElevM = value;
+            // タイロッド軸心標高 Z_tr はプロンプトを廃止した(2026-07-29)。
+            // Create() で選択したタイロッドの TieElevation から自動設定済み(a.TieElevM)、
+            // Action() では前回保存値をそのまま使う。
+
+            // 杭先端標高 Z_tip ではなく杭上端(杭頭)標高 Z_head を入力させ、全長 L・
+            // 傾斜角 θ から内部で Z_tip へ変換する(前壁と同じ方式。2026-07-29)。
+            double headElevDefault_m = SheetPileQuayWall.Core.PileGeometry.HeadElevation(
+                a.TipElevM, length_m, inclDeg);
 
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
-                ed, $"\n杭先端標高 Z_tip (m, D.L. 基準) <{a.TipElevM:F3}>: ", a.TipElevM,
+                ed, $"\n杭上端標高 Z_head (m, D.L. 基準) <{headElevDefault_m:F3}>: ",
+                headElevDefault_m,
                 SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.TipElev_Min_m,
-                SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.TipElev_Max_m,
+                SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.TipElev_Max_m + length_m,
                 out value))
             {
                 return false;
             }
-            double tipElevM = value;
+            double tipElevM = value - length_m *
+                System.Math.Cos(inclDeg * System.Math.PI / 180.0);
 
             int colorIdx;
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskInt(
@@ -354,7 +341,6 @@ namespace SheetPileQuayWall.Plugin.Commands
             a.InclDeg = inclDeg;
             a.ClosedTip = closedTip;
             a.SpanM = spanM;
-            a.TieElevM = tieElevM;
             a.TipElevM = tipElevM;
             a.ColorIdx = colorIdx;
 

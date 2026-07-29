@@ -443,17 +443,17 @@ namespace SheetPileQuayWall.Plugin.Commands
             effectiveWidth_m = 0.0;
             wallLength_m = 0.0;
 
-            if (!PromptSpec(ed, record))
-            {
-                return false;
-            }
-
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
                 ed, $"\n施設全長 (m, +Y 方向) <{DefaultWallLength_m:F3}>: ",
                 DefaultWallLength_m,
                 SheetPileQuayWall.Core.FrontWall.WallLayout.WallLength_Min_m,
                 SheetPileQuayWall.Core.FrontWall.WallLayout.WallLength_Max_m,
                 out wallLength_m))
+            {
+                return false;
+            }
+
+            if (!PromptSpec(ed, record))
             {
                 return false;
             }
@@ -617,13 +617,30 @@ namespace SheetPileQuayWall.Plugin.Commands
                 return false;
             }
 
-            double tipElev_m;
+            // 杭先端標高 Z_tip ではなく杭上端(杭頭)標高 Z_head を入力させ、全長 L・
+            // 傾斜角 θ から内部で Z_tip へ変換する。内部表現(XData・タイロッド/
+            // 控え杭の整列計算)は従来どおり Z_tip 基準のまま変えない。
+            double headElevDefault_m = SheetPileQuayWall.Core.PileGeometry.HeadElevation(
+                record.TipPoint.Z, record.LengthM, record.InclDeg);
+
+            double headElev_m;
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
-                ed, $"\n杭先端標高 Z_tip (m, D.L. 基準) <{record.TipPoint.Z:F3}>: ",
-                record.TipPoint.Z,
+                ed, $"\n杭上端標高 Z_head (m, D.L. 基準) <{headElevDefault_m:F3}>: ",
+                headElevDefault_m,
                 SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.TipElev_Min_m,
-                SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.TipElev_Max_m,
-                out tipElev_m))
+                SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.TipElev_Max_m
+                    + record.LengthM,
+                out headElev_m))
+            {
+                return false;
+            }
+
+            double tipElev_m = headElev_m - record.LengthM *
+                System.Math.Cos(record.InclDeg * System.Math.PI / 180.0);
+
+            if (!SheetPileQuayWall.Plugin.Prompt.Report(ed,
+                SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.ValidateTipElevation(
+                    tipElev_m)))
             {
                 return false;
             }

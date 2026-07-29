@@ -303,30 +303,8 @@ namespace SheetPileQuayWall.Plugin.Commands
         {
             positionY = defaultY;
 
-            // 鋼種・設計基準・荷重状態(008 TryGrade / TryCode / TryState 相当)。
-            // 許容張力はこの 3 項目と径で決まるため、省略すると張力照査が既定値
-            // (HT690・部分係数法・永続)のまま行われてしまう
-            string gradeText;
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskKeyword(
-                ed, $"\n鋼種 <{p.Grade}>: ",
-                new string[] { "HT690", "HT740", "SS400", "SS490" },
-                p.Grade.ToString(), out gradeText)) return false;
-            p.Grade = ParseEnum(gradeText, p.Grade);
-
-            string codeText;
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskKeyword(
-                ed, $"\n設計基準 (Allowable=旧基準・許容応力度法 / PartialFactor=新基準・部分係数法) <{p.Code}>: ",
-                new string[] { "Allowable", "PartialFactor" },
-                p.Code.ToString(), out codeText)) return false;
-            p.Code = ParseEnum(codeText, p.Code);
-
-            string stateText;
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskKeyword(
-                ed, $"\n荷重状態 (Normal=常時/永続 / Seismic=地震時/変動) <{p.State}>: ",
-                new string[] { "Normal", "Seismic" },
-                p.State.ToString(), out stateText)) return false;
-            p.State = ParseEnum(stateText, p.State);
-
+            // 鋼種・設計基準・荷重状態はプロンプトを廃止し、既定値(HT690・部分係数法・
+            // 永続)を固定で使う(2026-07-29)。張力照査の計算式自体は変更していない。
             double value;
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
                 ed, $"\nタイロッド径 (m) <{p.RodDiameter:F3}>: ",
@@ -406,37 +384,11 @@ namespace SheetPileQuayWall.Plugin.Commands
                 p.TieElevation, -5.0, 10.0, out value)) return false;
             p.TieElevation = value;
 
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
-                ed, $"\n腹起し溝形鋼高さ h (m) <{p.WalingHeight:F3}>: ",
-                p.WalingHeight, 0.001, 2.000, out value)) return false;
-            p.WalingHeight = value;
-
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
-                ed, $"\n定着プレート厚 t2 (m) <{p.PlateThickness:F3}>: ",
-                p.PlateThickness, 0.001, 0.100, out value)) return false;
-            p.PlateThickness = value;
-
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
-                ed, $"\n定着ワッシャー厚 t1 (m) <{p.WasherThickness:F3}>: ",
-                p.WasherThickness, 0.001, 0.100, out value)) return false;
-            p.WasherThickness = value;
-
-            // 表外の径のみナット高さ・調節長を明示入力させる(表内は自動設定済み)
-            if (!nutFromTable)
-            {
-                ed.WriteMessage(
-                    "\n  この径は積算基準のナット高さ表 (φ38〜φ65) の範囲外です。値を指定してください。");
-
-                if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
-                    ed, $"\nナット高さ (m) <{p.NutHeight:F3}>: ",
-                    p.NutHeight, 0.001, 0.200, out value)) return false;
-                p.NutHeight = value;
-
-                if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
-                    ed, $"\n調節長 (m) <{p.AdjustLength:F3}>: ",
-                    p.AdjustLength, 0.001, 0.200, out value)) return false;
-                p.AdjustLength = value;
-            }
+            // 腹起し溝形鋼高さ・定着プレート厚・定着ワッシャー厚・ナット高さ・調節長は
+            // プロンプトを廃止し、既定値(_Create)または前回保存値(_Action)を固定で
+            // 使う(2026-07-29)。表内の径ではナット高さ・調節長は引き続き
+            // ApplyStandardNutHeight() が積算基準表の値へ自動設定する。全長算出式
+            // (積算基準 3-4.5-(13))自体は変更していない。
 
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
                 ed, $"\n取付点反力 Ap (kN/m、0 で張力照査なし) <{p.AnchorReaction:F1}>: ",
@@ -477,12 +429,6 @@ namespace SheetPileQuayWall.Plugin.Commands
             }
 
             return true;
-        }
-
-        private static T ParseEnum<T>(string text, T fallback) where T : struct
-        {
-            T parsed;
-            return System.Enum.TryParse(text, out parsed) ? parsed : fallback;
         }
 
         // 008 の計算層は違反時に例外を投げる。ここで捕捉してエラー停止に変換する。

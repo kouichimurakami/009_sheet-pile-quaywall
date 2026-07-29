@@ -281,13 +281,24 @@ namespace Autodesk.AutoCAD.DatabaseServices
         }
     }
 
-    public sealed class BlockTableRecord : DBObject
+    public sealed class BlockTableRecord : DBObject,
+        System.Collections.Generic.IEnumerable<ObjectId>
     {
         public const string ModelSpace = "*Model_Space";
 
         public ObjectId AppendEntity(Entity entity)
         {
             throw new System.NotSupportedException("AutoCAD スタブです。");
+        }
+
+        public System.Collections.Generic.IEnumerator<ObjectId> GetEnumerator()
+        {
+            throw new System.NotSupportedException("AutoCAD スタブです。");
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
         }
     }
 
