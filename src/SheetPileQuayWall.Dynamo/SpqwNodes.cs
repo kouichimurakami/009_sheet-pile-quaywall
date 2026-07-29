@@ -6,6 +6,12 @@
 // Dynamo Zero Touch Nodes(Civil 3D 2025 同梱 Dynamo 3.3)
 // 移植元: 007 SpspNodes.CalcSection。
 //
+// SheetPileQuayWall.Plugin から分離した独立プロジェクト(2026-07-29)。AcCoreMgd 等の
+// AutoCAD 本体 DLL を参照するアセンブリを Dynamo の Import Library に渡すと、
+// deps.json に Private=False の参照が載らないため実機で読み込みが失敗する
+// (README §10 参照)。本ファイルは元々 AutoCAD トランザクションを伴わない純計算
+// (Core 層の呼び出しのみ)として書かれていたため、コード自体の変更は無い。
+//
 // 断面性能・数量集計・柱状図解析・打設歩掛積算(4系統)はいずれも AutoCAD トランザクション
 // を伴わない純計算のためノード化している。ジオメトリ生成ノード(007 SpspNodes.CreateSolid
 // 相当)は AutoCAD のトランザクションを伴い実機でしか検証できないため、この環境では移植しない。
@@ -19,9 +25,9 @@
 // (CalcWeightedN と同じ規約)。コマンドが選択済み XData から読む外径・肉厚・全長等は、
 // ノードでは明示的な引数として受け取る(XData を経由しないため)。
 
-namespace SheetPileQuayWall.Plugin.Dynamo
+namespace SheetPileQuayWall.Dynamo
 {
-    // Dynamo ノードカテゴリ: SheetPileQuayWall.Plugin > Dynamo
+    // Dynamo ノードカテゴリ: SheetPileQuayWall.Dynamo > SpqwNodes
     public static class SpqwNodes
     {
         // ノード: SpqwNodes.CalcSection

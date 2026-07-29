@@ -8,7 +8,8 @@ rem NuGet の依存関係解決やプロジェクト間のビルド成果物の参照が壊れることがある。
 rem
 rem 使い方: このファイルをダブルクリックするだけ。
 rem 実行後は Visual Studio を再起動し、
-rem src\SheetPileQuayWall.Plugin\SheetPileQuayWall.Plugin.csproj を開き直すこと。
+rem src\SheetPileQuayWall.Plugin\SheetPileQuayWall.Plugin.csproj と
+rem src\SheetPileQuayWall.Dynamo\SheetPileQuayWall.Dynamo.csproj を開き直すこと。
 
 setlocal
 set ROOT=%~dp0..
@@ -24,11 +25,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 
 echo [3/4] NuGet復元を実行しています...
 dotnet restore "%ROOT%\src\SheetPileQuayWall.Plugin\SheetPileQuayWall.Plugin.csproj"
+dotnet restore "%ROOT%\src\SheetPileQuayWall.Dynamo\SheetPileQuayWall.Dynamo.csproj"
 
-echo [4/4] ビルドを実行しています(Core→Pluginの順)...
+echo [4/4] ビルドを実行しています(Core→Plugin、Core→Dynamoの順)...
 dotnet build "%ROOT%\src\SheetPileQuayWall.Plugin\SheetPileQuayWall.Plugin.csproj" -c Debug
+dotnet build "%ROOT%\src\SheetPileQuayWall.Dynamo\SheetPileQuayWall.Dynamo.csproj" -c Debug
 
 echo.
 echo 完了しました。Visual Studio を再起動し、
-echo src\SheetPileQuayWall.Plugin\SheetPileQuayWall.Plugin.csproj を開き直してください。
+echo src\SheetPileQuayWall.Plugin\SheetPileQuayWall.Plugin.csproj と
+echo src\SheetPileQuayWall.Dynamo\SheetPileQuayWall.Dynamo.csproj を開き直してください。
 pause

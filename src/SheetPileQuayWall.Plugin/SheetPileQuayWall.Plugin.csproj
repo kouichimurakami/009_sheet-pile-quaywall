@@ -14,11 +14,9 @@
         ※ 事前に scripts/verify-dll-versions.ps1 が exit 0 になることを確認すること。
         ※ AutoCAD が既定パス以外の場合は -p:AcadRoot="..." を指定する。
 
-    Dynamo（フェーズ 5）: 前壁の断面性能ノードのみを実装する（§12 項目3 の決定）。
-    ジオメトリを扱わない純計算ノードのため ProtoGeometry は参照せず、
-    MultiReturn 属性のために DynamoServices のみ参照する。
-    Dynamo 抜きでビルドする場合（007 の方式を踏襲）:
-      dotnet build ... -p:UseAutoCadStubs=true -p:ExcludeDynamo=true
+    Dynamo Zero Touch Node は本プロジェクトには含まれない。SheetPileQuayWall.Dynamo
+    （独立プロジェクト）を参照（2026-07-29、分離理由は同プロジェクトのコメントと
+    README §10 を参照）。
   -->
 
   <PropertyGroup>
@@ -37,24 +35,8 @@
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
     <AcadRoot Condition="'$(AcadRoot)' == ''">C:\Program Files\Autodesk\AutoCAD 2025</AcadRoot>
-    <DynamoRoot Condition="'$(DynamoRoot)' == ''">$(AcadRoot)\C3D\Dynamo\Core</DynamoRoot>
     <UseAutoCadStubs Condition="'$(UseAutoCadStubs)' == ''">false</UseAutoCadStubs>
-    <ExcludeDynamo Condition="'$(ExcludeDynamo)' == ''">false</ExcludeDynamo>
   </PropertyGroup>
-
-  <!-- Dynamo Zero Touch Node。ExcludeDynamo=true で参照ごと除外する。 -->
-  <ItemGroup Condition="'$(ExcludeDynamo)' == 'true'">
-    <Compile Remove="Dynamo\SpqwNodes.cs" />
-  </ItemGroup>
-
-  <!-- スタブビルド時は DynamoServices もスタブで代替する（build_stubs.csproj に含む）。 -->
-  <ItemGroup Condition="'$(ExcludeDynamo)' != 'true' And '$(UseAutoCadStubs)' != 'true'">
-    <Reference Include="DynamoServices">
-      <HintPath>$(DynamoRoot)\DynamoServices.dll</HintPath>
-      <Private>False</Private>
-      <SpecificVersion>False</SpecificVersion>
-    </Reference>
-  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\SheetPileQuayWall.Core\SheetPileQuayWall.Core.csproj" />

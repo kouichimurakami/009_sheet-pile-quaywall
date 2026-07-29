@@ -1,0 +1,73 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    === 参照DLLバージョン: 未検証 ===
+    AutoCAD 2025 / Civil 3D 2025 が未インストールのため、実 DLL のバージョン実測が
+    できていない。CLAUDE.PRIVATE.md §9.3 に従い、実機ビルド前に必ず
+    scripts/verify-dll-versions.ps1 を実行すること。
+
+    Dynamo Zero Touch Node 専用プロジェクト(2026-07-29 新設、SheetPileQuayWall.Plugin
+    から分離)。
+    分離理由: AcCoreMgd/AcDbMgd/AcMgd を参照するアセンブリを Dynamo の
+    「Import Library」で読み込むと、実機で Dynamo.Exceptions.LibraryLoadFailedException
+    が発生し読み込み全体が失敗することが判明した。AutoCAD の NETLOAD は成功するため
+    AutoCAD 側の問題ではない。原因は、.NET 8 の deps.json ベースの依存解決
+    (AssemblyDependencyResolver)が Private=False(Copy Local = False)の参照を
+    deps.json に載せないため、Dynamo 側のライブラリ読み込みが AcCoreMgd 等を解決
+    できないことにあると考えられる(README §10 参照)。AutoCAD 本体 DLL を配布物に
+    含めない制約(CLAUDE.PRIVATE.md §2.1/§8)は変えられないため、Dynamo に読み込ませる
+    アセンブリ自体から AutoCAD 参照を無くす方針とした。
+
+    本プロジェクトは Core + DynamoServices のみを参照し、AutoCAD 本体 DLL への参照を
+    一切持たない。AutoCAD コマンド(SPQW_* 19コマンド)は引き続き
+    SheetPileQuayWall.Plugin.dll を NETLOAD する。Dynamo へは本プロジェクトの出力
+    (SheetPileQuayWall.Dynamo.dll)を Import Library する(2 つの DLL に分かれる)。
+
+    ビルド方法:
+      スタブ(構文検証のみ。AutoCAD/Dynamo 不要):
+        dotnet build src/SheetPileQuayWall.Dynamo/SheetPileQuayWall.Dynamo.csproj -c Release -p:UseAutoCadStubs=true
+      実機(配布用):
+        dotnet build src/SheetPileQuayWall.Dynamo/SheetPileQuayWall.Dynamo.csproj -c Release
+        ※ 事前に scripts/verify-dll-versions.ps1 が exit 0 になることを確認すること。
+        ※ Civil 3D が既定パス以外の場合は -p:AcadRoot="..." を指定する。
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>annotations</Nullable>
+    <!-- CLAUDE.PRIVATE.md §2.1: using ディレクティブを使わない。 -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>SheetPileQuayWall.Dynamo</AssemblyName>
+    <RootNamespace>SheetPileQuayWall.Dynamo</RootNamespace>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <AcadRoot Condition="'$(AcadRoot)' == ''">C:\Program Files\Autodesk\AutoCAD 2025</AcadRoot>
+    <DynamoRoot Condition="'$(DynamoRoot)' == ''">$(AcadRoot)\C3D\Dynamo\Core</DynamoRoot>
+    <UseAutoCadStubs Condition="'$(UseAutoCadStubs)' == ''">false</UseAutoCadStubs>
+  </PropertyGroup>
+
+  <!-- MultiReturn / IsVisibleInDynamoLibrary 属性のためだけに DynamoServices を参照する。 -->
+  <ItemGroup Condition="'$(UseAutoCadStubs)' != 'true'">
+    <Reference Include="DynamoServices">
+      <HintPath>$(DynamoRoot)\DynamoServices.dll</HintPath>
+      <Private>False</Private>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SheetPileQuayWall.Core\SheetPileQuayWall.Core.csproj" />
+  </ItemGroup>
+
+  <!-- 構文検証用スタブ。配布物には決して含めないこと。 -->
+  <ItemGroup Condition="'$(UseAutoCadStubs)' == 'true'">
+    <ProjectReference Include="..\..\stubs\build_stubs.csproj" />
+  </ItemGroup>
+
+  <!-- スタブ出力には AutoCadStubs.dll が含まれる。配布物と取り違えないよう毎回警告する。 -->
+  <Target Name="WarnOnStubBuild" BeforeTargets="Build" Condition="'$(UseAutoCadStubs)' == 'true'">
+    <Warning Text="AutoCAD スタブでビルドしています。出力は構文検証専用です。AutoCadStubs.dll を含むため配布してはいけません。" />
+  </Target>
+
+</Project>

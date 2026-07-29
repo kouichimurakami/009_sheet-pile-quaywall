@@ -19,7 +19,6 @@
 
 namespace SheetPileQuayWall.Plugin.XData
 {
-    [Autodesk.DesignScript.Runtime.IsVisibleInDynamoLibrary(false)]
     public sealed class AnchorPileRecord
     {
         public const string RegAppName = "SPQW_ANCHORPILE";

@@ -72,9 +72,9 @@
 | `AcCoreMgd.dll` | AutoCAD コア | Plugin | `False` |
 | `AcDbMgd.dll` | Database / Solid3d / XData | Plugin | `False` |
 | `AcMgd.dll` | Application / Document | Plugin | `False` |
-| `DynamoServices.dll` | `MultiReturn` 属性 | Plugin(`ExcludeDynamo=true` で除外可) | `False` |
+| `DynamoServices.dll` | `MultiReturn` / `IsVisibleInDynamoLibrary` 属性 | Dynamo | `False` |
 
-**Core は BCL のみ**を参照し、上記を一切参照しない。`ProtoGeometry.dll` は参照しない(Dynamo ノードはジオメトリを扱わない純計算のため)。
+**Core は BCL のみ**を参照し、上記を一切参照しない。**Dynamo は `DynamoServices.dll` のみ**を参照し、AutoCAD 本体 DLL(`AcCoreMgd`/`AcDbMgd`/`AcMgd`)は一切参照しない(2026-07-29、Plugin から分離。理由は §4.1・§10 参照)。`ProtoGeometry.dll` はどちらも参照しない(Dynamo ノードはジオメトリを扱わない純計算のため)。
 
 > **参照 DLL バージョン: 未検証**
 > 開発機に AutoCAD 2025 / Civil 3D 2025 が未インストールのため、実 DLL のバージョンを実測できていない(`scripts/verify-dll-versions.ps1` → exit 2)。バージョン不一致は `TypeLoadException` / `MissingMethodException` としてランタイムでのみ顕在化するため、**実機で同スクリプトが exit 0 になることを確認するまで配布しないこと**(CLAUDE.PRIVATE.md §9)。
@@ -193,12 +193,12 @@
 
 ## 4. Dynamo ノード
 
-Civil 3D 2025 同梱の Dynamo 3.3 で使う Zero Touch Node。全 **7 ノード**。
+Civil 3D 2025 同梱の Dynamo 3.3 で使う Zero Touch Node。全 **7 ノード**。**`SheetPileQuayWall.Dynamo.dll` という独立した DLL**に実装されており、AutoCAD コマンドの `SheetPileQuayWall.Plugin.dll` とは別に Import Library する(§7「Dynamo への登録」参照)。
 
 ### 4.1 共通仕様
 
-- **カテゴリ**: ノード検索で `SpqwNodes.` と入力すると `SheetPileQuayWall.Plugin > Dynamo` 配下に 7 ノードが表示される。
-- **ライブラリ走査からの除外**: Dynamo の Import Library はアセンブリ内の public 型を既定ですべて走査してノード候補にする。`SpqwNodes` 以外の Plugin クラス(`FrontWallCommands` 等の各コマンド、`DrawingHelper` / `Prompt` / `SolidBuilder` / `XDataStore` / 3 部材の XData レコード)は AutoCAD 専用の型・`out` 引数を使うため走査対象から外す必要があり、`[Autodesk.DesignScript.Runtime.IsVisibleInDynamoLibrary(false)]` を各クラスへ付与している(§10 参照。付与前は Dynamo 側の Import Library がライブラリ全体を `LibraryLoadFailedException` で拒否していた)。
+- **カテゴリ**: ノード検索で `SpqwNodes.` と入力すると `SheetPileQuayWall.Dynamo > SpqwNodes` 配下に 7 ノードが表示される。
+- **独立プロジェクトの理由**: 当初は `SheetPileQuayWall.Plugin.dll`(AutoCAD コマンドと同じアセンブリ)に同居させていたが、実機で Dynamo の Import Library が `Dynamo.Exceptions.LibraryLoadFailedException` で読み込み全体を拒否する不具合が判明した。原因は、AcCoreMgd/AcDbMgd/AcMgd を `<Private>False</Private>` で参照するアセンブリは .NET 8 の `deps.json` にその参照が載らず、Dynamo 側の依存解決(`AssemblyDependencyResolver` ベースと推定)が解決できないためと考えられる。AutoCAD の `NETLOAD` は影響を受けなかった(AutoCAD 独自の読み込み経路のため)。`SpqwNodes.cs` はもともと AutoCAD 非依存の純計算として書かれていたため、AutoCAD 参照を持たない別プロジェクト `SheetPileQuayWall.Dynamo` へ移し、Core と `DynamoServices.dll` のみを参照する構成にした(§10 参照)。
 - **入力**: メソッドの各引数がそのまま入力ポートになる。`Number` / `String` / `Boolean` / `Code Block` ノードから配線する。**未配線のポートはデフォルト値で実行される**ため、既定値のまま出力を確かめてから実データに置き換えられる(例外: `CalcWeightedN` はファイルパス必須のため既定値では例外)。
 - **出力**: 戻り値は `[MultiReturn]` の辞書で、**日本語の辞書キーがそのまま出力ポート名**になる(CLAUDE.PRIVATE.md §2.1)。必要な項目だけを下流(`Watch` / `Data.ExportToCSV` / `Excel.WriteToFile` 等)へ配線すればよい。
 - **list-level 自動反復**: 入力に単一値の代わりにリストを渡すと、Dynamo が 1 要素ずつ自動で関数を呼び出し、結果をリストで返す(§4.9 の例 1)。
@@ -1009,24 +1009,27 @@ CSV の行順は問わない(標高上端の降順に自動で並べ替えたう
 
 ## 7. ビルド方法
 
-Core 層は AutoCAD 非依存のため WSL / Linux でもビルド・テストできる。Plugin 層は AutoCAD が必要で、無い環境ではスタブで構文検証まで行う。
+**3 プロジェクト構成**(2026-07-29、Dynamo ノードを Plugin から分離): Core 層は AutoCAD 非依存のため WSL / Linux でもビルド・テストできる。Plugin 層(AutoCAD コマンド)は AutoCAD 本体 DLL が必要、Dynamo 層(Zero Touch Node)は `DynamoServices.dll` のみが必要で、いずれも無い環境ではスタブで構文検証まで行う。
 
 ```bash
 # Core + テスト(AutoCAD 不要。671 件が green であること)
 dotnet test tests/SheetPileQuayWall.Core.Tests -c Release
 
-# Plugin の構文検証(AutoCAD 不要。スタブとリンクする。配布不可)
+# Plugin(AutoCAD コマンド)の構文検証(AutoCAD 不要。スタブとリンクする。配布不可)
 dotnet build src/SheetPileQuayWall.Plugin/SheetPileQuayWall.Plugin.csproj -c Release -p:UseAutoCadStubs=true
 
-# Dynamo 抜きで検証する場合
-dotnet build src/SheetPileQuayWall.Plugin/SheetPileQuayWall.Plugin.csproj -c Release -p:UseAutoCadStubs=true -p:ExcludeDynamo=true
+# Dynamo(Zero Touch Node)の構文検証(AutoCAD/Dynamo 不要。スタブとリンクする。配布不可)
+dotnet build src/SheetPileQuayWall.Dynamo/SheetPileQuayWall.Dynamo.csproj -c Release -p:UseAutoCadStubs=true
 
 # Plugin の実機ビルド(AutoCAD 必須)
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-dll-versions.ps1   # exit 0 を確認
 dotnet build src/SheetPileQuayWall.Plugin/SheetPileQuayWall.Plugin.csproj -c Release
+
+# Dynamo の実機ビルド(Civil 3D 同梱の Dynamo 3.3 必須)
+dotnet build src/SheetPileQuayWall.Dynamo/SheetPileQuayWall.Dynamo.csproj -c Release
 ```
 
-AutoCAD が既定パス以外にある場合は `-p:AcadRoot="..."` を指定する。
+AutoCAD / Civil 3D が既定パス以外にある場合は `-p:AcadRoot="..."` を指定する。Dynamo プロジェクトは `$(AcadRoot)\C3D\Dynamo\Core\DynamoServices.dll` を既定の参照元とする(`-p:DynamoRoot="..."` で個別に上書きも可)。
 
 ### プロジェクトの置き場所を固定する(推奨。フォルダ乱立の根本対策)
 
@@ -1055,13 +1058,13 @@ AutoCAD が既定パス以外にある場合は `-p:AcadRoot="..."` を指定す
 
 ### Dynamo への登録(Import Library)
 
-Dynamo ノードも Dynamo 側の設定に永続登録されないため、グラフを開くたびに手動でインポートする。
+Dynamo ノードは AutoCAD コマンドとは**別の DLL**(`SheetPileQuayWall.Dynamo.dll`)にあり、Dynamo 側の設定に永続登録されないため、グラフを開くたびに手動でインポートする。
 
 1. Civil 3D 2025 で `DYNAMO` コマンドを実行し Dynamo を起動する
-2. 左側のライブラリペイン下部の「Import Library...」から、NETLOAD と同じ `SheetPileQuayWall.Plugin.dll` を選択する
+2. 左側のライブラリペイン下部の「Import Library...」から、実機ビルドの出力 `src\SheetPileQuayWall.Dynamo\bin\Release\net8.0-windows\SheetPileQuayWall.Dynamo.dll` を選択する(**`SheetPileQuayWall.Plugin.dll` ではない**。§4.1 参照)
 3. インポート後、ノード検索に `SpqwNodes.` と入力すると §4 の 7 ノードが一覧表示される(§4.1 共通仕様)
 
-AutoCAD コマンド(NETLOAD)と Dynamo ノード(Import Library)は独立した登録操作であり、使う方だけ実行すればよい。**本手順は実機 AutoCAD / Civil 3D 環境で未検証**(§9.5「実機動作確認」参照)。
+AutoCAD コマンド(NETLOAD、`SheetPileQuayWall.Plugin.dll`)と Dynamo ノード(Import Library、`SheetPileQuayWall.Dynamo.dll`)は別 DLL・独立した登録操作であり、使う方だけ実行すればよい。**本手順は実機 AutoCAD / Civil 3D 環境で未検証**(§9.5「実機動作確認」参照)。
 
 ### プロジェクト構成
 
@@ -1086,15 +1089,18 @@ AutoCAD コマンド(NETLOAD)と Dynamo ノード(Import Library)は独立した
 │   │   │                                 SpecTextParser・QuantityReconciliation)6 ファイル
 │   │   └── Geotech/                      柱状図から加重平均N値・一軸圧縮強度を算出
 │   │                                     (BoringLog.cs。CsvTable・JetLayerType を再利用)
-│   └── SheetPileQuayWall.Plugin/        AutoCAD 依存層
-│       ├── Commands/                    SPQW_* 19 コマンド(8 ファイル。ImportCommands が
-│       │                                 帳票取り込み 4 コマンド、AnchorDriveEstimateCommand
-│       │                                 が控え杭の打撃工法・陸上打設を担当)
-│       ├── XData/                       XDataStore(キー=値 + 1011)+ 3 部材のレコード
-│       ├── Dynamo/SpqwNodes.cs          Zero Touch Node 7 個(断面性能・数量集計・柱状図解析・
-│       │                                 打設歩掛積算 4 系統。すべて AutoCAD 非依存の純計算)
-│       └── DrawingHelper.cs / Prompt.cs / SolidBuilder.cs
-├── stubs/                               AutoCAD API スタブ(構文検証専用。配布禁止)
+│   ├── SheetPileQuayWall.Plugin/        AutoCAD 依存層(AcCoreMgd/AcDbMgd/AcMgd を参照)
+│   │   ├── Commands/                    SPQW_* 19 コマンド(8 ファイル。ImportCommands が
+│   │   │                                 帳票取り込み 4 コマンド、AnchorDriveEstimateCommand
+│   │   │                                 が控え杭の打撃工法・陸上打設を担当)
+│   │   ├── XData/                       XDataStore(キー=値 + 1011)+ 3 部材のレコード
+│   │   └── DrawingHelper.cs / Prompt.cs / SolidBuilder.cs
+│   └── SheetPileQuayWall.Dynamo/        Dynamo Zero Touch Node 層(2026-07-29 新設。
+│       └── SpqwNodes.cs                  DynamoServices.dll のみ参照、AutoCAD 本体 DLL は
+│                                         参照しない。7 ノード(断面性能・数量集計・
+│                                         柱状図解析・打設歩掛積算 4 系統)。すべて
+│                                         AutoCAD 非依存の純計算(Core 呼び出しのみ)
+├── stubs/                               AutoCAD/Dynamo API スタブ(構文検証専用。配布禁止)
 ├── tests/SheetPileQuayWall.Core.Tests/  xUnit 671 ケース + fixtures/
 ├── scripts/
 │   ├── port-from-legacy.sh              007/008 からの冪等移植
@@ -1202,12 +1208,27 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 
 それ以前の機能追加履歴(帳票 CSV 取り込み・付帯船舶・控え杭打設歩掛・柱状図解析ノード・Dynamo 節全面改訂の経緯)は git log と [`docs/implementation-plan.md`](docs/implementation-plan.md) の変更履歴を参照。
 
+**実機バグ修正(続報): Dynamo Zero Touch Node を独立プロジェクト `SheetPileQuayWall.Dynamo` へ分離**(新規 `src/SheetPileQuayWall.Dynamo/`、`SheetPileQuayWall.Plugin.csproj` から Dynamo 関連の参照・設定を削除)
+
+- 直前の対処(`IsVisibleInDynamoLibrary(false)` の付与、下記の旧エントリ)を実機に反映しても `Dynamo.Exceptions.LibraryLoadFailedException` は解消しなかった。NETLOAD は成功する、同一 AutoCAD セッション内での二重読み込みではない(AutoCAD を再起動してから Dynamo のみ実行)ことを実機で確認した後、`SheetPileQuayWall.Plugin.deps.json` の中身を確認したところ、依存関係として `SheetPileQuayWall.Core` のみが記載され、`<Private>False</Private>` で参照している `AcCoreMgd`/`AcDbMgd`/`AcMgd` が**一切載っていない**ことが判明した。.NET 8 の `AssemblyDependencyResolver` ベースの依存解決は `deps.json` を参照するため、そこに載っていない依存は解決できないと考えられる。AutoCAD の `NETLOAD` は(deps.json に依存しない別経路と見られ)影響を受けない一方、Dynamo の Import Library がこの経路で失敗していたと判断した。
+- `<Private>False</Private>` は「AutoCAD 本体 DLL を配布物に同梱しない」制約(CLAUDE.PRIVATE.md §2.1/§8)上外せないため、根本対応として **Dynamo に読み込ませるアセンブリ自体から AutoCAD 参照を無くす**方針とした。`SpqwNodes.cs` は元々 AutoCAD トランザクションを伴わない純計算として書かれていたため、コード変更は無く、新規プロジェクト `SheetPileQuayWall.Dynamo`(`SheetPileQuayWall.Core` と `DynamoServices.dll` のみ参照)へ移すだけで対応できた。
+- `SheetPileQuayWall.Plugin.csproj` から `DynamoServices` 参照・`ExcludeDynamo` プロパティ・`Dynamo\SpqwNodes.cs` の除外設定を削除した。直前の対処で追加した `IsVisibleInDynamoLibrary(false)` は Plugin 側では不要になったため 15 クラスから削除した(Plugin.dll はもう Dynamo に読み込ませないため)。
+- AutoCAD コマンド(NETLOAD)は引き続き `SheetPileQuayWall.Plugin.dll`、Dynamo ノード(Import Library)は新しい `SheetPileQuayWall.Dynamo.dll` を読み込む、2 つの DLL に分かれる運用になった(§7 参照)。
+- `scripts/fix-restore.bat` / `scripts/update-project.bat` は Core への参照を辿って Plugin だけを復旧しており、新設した Dynamo プロジェクトは対象外だったため、両プロジェクトを restore・build するよう更新した。
+- 効果は実機で未確認(次回の Import Library 実行結果待ち)。Core 層の変更は無い(テストは 671 ケースのまま)。
+
+<details>
+<summary>旧エントリ(効果が無かったことが判明した対処。参考として残す)</summary>
+
 **実機バグ修正: Dynamo の Import Library が `LibraryLoadFailedException` で失敗する不具合**(15 クラスに `IsVisibleInDynamoLibrary(false)` を追加)
 
 - 実機(Civil 3D 2025 / Dynamo 3.3)で Dynamo の「Import Library」から `SheetPileQuayWall.Plugin.dll` を読み込むと、`Dynamo.Exceptions.LibraryLoadFailedException` でライブラリ全体の読み込みが失敗することが判明した。同じ DLL を AutoCAD の `NETLOAD` で読み込む分には成功するため、AutoCAD コマンド自体・参照 DLL の問題ではなく Dynamo 固有の読み込み処理に原因があると判断した。
 - 原因は、Dynamo の Import Library がアセンブリ内の public 型を既定で**すべて**走査してノード候補にする点。`SpqwNodes`(Dynamo 公開を意図した 7 ノード)以外にも、`FrontWallCommands` 等の各コマンドクラス、`DrawingHelper` / `Prompt` / `SolidBuilder` / `XDataStore`、3 部材の XData レコードクラスが軒並み public であり、これらは `Editor` / `Transaction` / `out` 引数付きメソッドなど Dynamo が扱えない AutoCAD 専用の型を含むため、走査時に例外が起きてライブラリ全体の読み込みが止まっていたと考えられる。これを走査対象から除外する属性がコード上どこにも付与されていなかった。
 - `SpqwNodes` を除く 15 クラス(コマンド 12 クラス + XData レコード 3 クラス)に `[Autodesk.DesignScript.Runtime.IsVisibleInDynamoLibrary(false)]` を付与した。WSL でのスタブ構文検証用に `stubs/AutoCadStubs.cs` へ同属性のスタブを追加した。
 - Core 層の変更は無い(テストは 671 ケースのまま)。
+- **実機で再検証した結果、この対処だけでは `LibraryLoadFailedException` は解消しなかった**(上記の新エントリ参照)。原因の切り分けとしては無駄ではなかった(「型走査が原因」という仮説を反証できた)が、単独では不十分だった。
+
+</details>
 
 **前壁鋼管矢板の内部構造を杭先端標高 Z_tip 基準から杭上端(杭頭)標高 Z_head 基準へ作り替え**(Core `FrontWallRef`/`FrontWallPlacement`/`PileGeometry`、Plugin `FrontWallRecord`(XData)/`FrontWallCommands`/`DrawingHelper`/`ImportCommands`/`AnchorPileCommands`)
 

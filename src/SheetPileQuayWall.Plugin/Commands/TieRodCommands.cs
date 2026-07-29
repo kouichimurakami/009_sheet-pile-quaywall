@@ -17,7 +17,6 @@
 
 namespace SheetPileQuayWall.Plugin.Commands
 {
-    [Autodesk.DesignScript.Runtime.IsVisibleInDynamoLibrary(false)]
     public static class TieRodCommands
     {
         public const string LayerName = "タイ材";

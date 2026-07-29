@@ -26,7 +26,6 @@
 
 namespace SheetPileQuayWall.Plugin.XData
 {
-    [Autodesk.DesignScript.Runtime.IsVisibleInDynamoLibrary(false)]
     public sealed class FrontWallRecord
     {
         public const string RegAppName = "SPQW_FRONTWALL";

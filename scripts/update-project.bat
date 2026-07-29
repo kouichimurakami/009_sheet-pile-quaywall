@@ -70,13 +70,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 
 echo [5/5] NuGet復元とビルドを実行しています...
 dotnet restore "%TARGET%\src\SheetPileQuayWall.Plugin\SheetPileQuayWall.Plugin.csproj"
+dotnet restore "%TARGET%\src\SheetPileQuayWall.Dynamo\SheetPileQuayWall.Dynamo.csproj"
 dotnet build "%TARGET%\src\SheetPileQuayWall.Plugin\SheetPileQuayWall.Plugin.csproj" -c Debug
+dotnet build "%TARGET%\src\SheetPileQuayWall.Dynamo\SheetPileQuayWall.Dynamo.csproj" -c Debug
 
 echo.
 echo 完了しました。プロジェクトの場所は今後も常にここです:
 echo   %TARGET%
-echo Visual Studio では次のファイルを開いてください:
+echo Visual Studio では次のファイルを開いてください(AutoCAD コマンド用):
 echo   %TARGET%\src\SheetPileQuayWall.Plugin\SheetPileQuayWall.Plugin.csproj
+echo Dynamo ノード用のプロジェクトはこちらです:
+echo   %TARGET%\src\SheetPileQuayWall.Dynamo\SheetPileQuayWall.Dynamo.csproj
 echo.
 echo 次回コードを更新する ときも、新しい ZIP をこの update-project.bat に
 echo ドラッグ^&ドロップするだけで完了します。

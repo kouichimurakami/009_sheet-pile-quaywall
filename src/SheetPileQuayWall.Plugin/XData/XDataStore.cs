@@ -17,7 +17,6 @@
 
 namespace SheetPileQuayWall.Plugin.XData
 {
-    [Autodesk.DesignScript.Runtime.IsVisibleInDynamoLibrary(false)]
     public static class XDataStore
     {
         // 形式バージョン。将来キー名や意味を変える場合はこれを上げ、読み側で分岐する。

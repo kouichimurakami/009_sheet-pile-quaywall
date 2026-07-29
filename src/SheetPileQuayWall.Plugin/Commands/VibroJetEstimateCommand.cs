@@ -22,7 +22,6 @@
 
 namespace SheetPileQuayWall.Plugin.Commands
 {
-    [Autodesk.DesignScript.Runtime.IsVisibleInDynamoLibrary(false)]
     public static class VibroJetEstimateCommand
     {
         // ════════════════════════════════════════════════════════════════════
