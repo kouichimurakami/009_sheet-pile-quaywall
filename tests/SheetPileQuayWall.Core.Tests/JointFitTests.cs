@@ -116,5 +116,55 @@ namespace SheetPileQuayWall.Core.Tests
             Xunit.Assert.Equal(c65, c75, 3);
             Xunit.Assert.Equal(c65, c100, 3);
         }
+
+        // T1304: P-P形の継手鋼管どうしの中心間距離は、外径 D に依存せず一定になる。
+        //        JointPlacement の変換で D(半径 R)の項が A側・B側から等しく現れ、
+        //        差分を取ると相殺されるため(2026-07-29 の分析で確認した数学的性質。
+        //        T1281 の LT型における「最小離隔が径に依らず一定」と同種の性質)
+        [Xunit.Fact]
+        public void T1304_PpPipeCenterDistance_IsIndependentOfDiameter()
+        {
+            double first = SheetPileQuayWall.Core.FrontWall.JointFit.PpPipeCenterDistance(
+                Diameters_m[0]);
+            foreach (double d in Diameters_m)
+            {
+                double dist = SheetPileQuayWall.Core.FrontWall.JointFit.PpPipeCenterDistance(d);
+                Xunit.Assert.Equal(first, dist, 6);
+            }
+        }
+
+        // T1305: 中心間距離は鋼管自身の半径(82.6mm)にほぼ一致する。
+        //        JointGeometry の J=0.2478m が、この関係になるよう K011 カタログ側で
+        //        既に調整済みであることの裏付け(2026-07-29、実機での質問をきっかけに発見)
+        [Xunit.Fact]
+        public void T1305_PpPipeCenterDistance_MatchesPipeRadius()
+        {
+            double pipeRadius_m =
+                SheetPileQuayWall.Core.FrontWall.JointCatalog.Pipe(
+                    SheetPileQuayWall.Core.FrontWall.JointType.PP)!.OD_m / 2.0;
+
+            double dist = SheetPileQuayWall.Core.FrontWall.JointFit.PpPipeCenterDistance(0.800);
+
+            Xunit.Assert.Equal(pipeRadius_m, dist, 3);
+        }
+
+        // T1306: 中心間距離がパイプ直径より明確に短い(= 2D断面で重なる)ことを固定する。
+        //        P-P形は「差し込んで隙間なく収まる」LT型とは異なり「2本の鋼管が絡み合う」
+        //        構造のため、正しい組立でも重なるのが正常(README §6.1・§9.4)。
+        //        将来 JointShapes・JointGeometry が変更され、この重なりが無くなった
+        //        (= 絡み合わない配置に変わった)場合に検出できるようにする
+        [Xunit.Fact]
+        public void T1306_PpPipeCenterDistance_ConfirmsPipesOverlapByDesign()
+        {
+            double pipeDiameter_m =
+                SheetPileQuayWall.Core.FrontWall.JointCatalog.Pipe(
+                    SheetPileQuayWall.Core.FrontWall.JointType.PP)!.OD_m;
+
+            double dist = SheetPileQuayWall.Core.FrontWall.JointFit.PpPipeCenterDistance(0.800);
+
+            Xunit.Assert.True(dist < pipeDiameter_m,
+                $"中心間距離 {dist * 1000:F1}mm がパイプ直径 {pipeDiameter_m * 1000:F1}mm 以上になり、" +
+                "P-P形の絡み合い構造が成立しなくなっている。");
+        }
     }
 }

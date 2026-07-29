@@ -3,7 +3,7 @@
 **鋼管矢板式岸壁**(前壁鋼管矢板 + タイロッド + 控え杭)を、単一の DLL で完結してパラメトリック 3D モデル生成・積算(施工歩掛計算)できる AutoCAD 2025 / Civil 3D 2025 プラグイン。
 
 - ターゲット: C# / .NET 8.0、`net8.0-windows`、x64、AutoCAD 2025 .NET / Civil 3D 2025 / Dynamo 3.3(Zero Touch Node)
-- 構成: **Core(AutoCAD 非依存の計算層)/ Plugin(AutoCAD 依存層)** の 2 プロジェクト分割。Core は BCL のみを参照し、WSL / Linux でもテストできる(**xUnit 671 ケース green**)
+- 構成: **Core(AutoCAD 非依存の計算層)/ Plugin(AutoCAD 依存層)/ Dynamo(Zero Touch Node 層)** の 3 プロジェクト分割。Core は BCL のみを参照し、WSL / Linux でもテストできる(**xUnit 674 ケース green**)
 - `006_steel-pipe-pile` / `007_steel-pipe-sheet-pile` / `008_tairod` の後継・統合版であり、**009 単独でビルド・実行できる**(3 リポジトリへのプロジェクト参照・アセンブリ参照は持たない)
 
 > **使用前に §9「注意点・既知の課題」を必ず読むこと。**実機動作は未検証であり、積算基準の一部に OCR から復元できなかった表がある。
@@ -901,7 +901,8 @@ CSV の行順は問わない(標高上端の降順に自動で並べ替えたう
 | 断面積 A / 断面 2 次モーメント I / 断面係数 Z / 単位重量 W / 断面 2 次半径 i | 日本製鉄 K011 | 確定 |
 | 有効幅 B(= 矢板ピッチ) | B = D + 継手有効間隔 J(K011)。LT65/LT75 は √式、PP は J=0.2478、PT は J=0.180 | 確定 |
 | 有効幅 B(LT100) | カタログ式が無く D + 0.100 | **推定** |
-| 継手 3D モデルの幾何整合性(LT65/LT75/LT100) | `FrontWall.JointFit` で検証済み。A側(山形鋼)・B側(T形鋼受け)を有効幅 B のピッチで配置すると、D=500〜2000mm の範囲で干渉せず、最小離隔は径によらず約5.5mmで一定(`JointPlacement` の変換式が A側・B側とも半径 R を単純加算する構造のため)。**PP/PT(円形継手管の絡み合い型)は対象外**、多角形交差判定では噛み合わせを正しく評価できない(§9.4 の縮退辺除去とは別の話。PP/PT の A側自己交差は縮退辺除去で解消済みだが、A側⟺B側の噛み合わせ評価自体は未対応) | 確定(LT100 含む) |
+| 継手 3D モデルの幾何整合性(LT65/LT75/LT100) | `FrontWall.JointFit.Overlaps`/`MinClearance` で検証済み。A側(山形鋼)・B側(T形鋼受け)を有効幅 B のピッチで配置すると、D=500〜2000mm の範囲で干渉せず、最小離隔は径によらず約5.5mmで一定(`JointPlacement` の変換式が A側・B側とも半径 R を単純加算する構造のため)。**多角形交差判定は PP/PT(円形継手管が絡み合う構造)には使えない**ため対象外(§9.4 の縮退辺除去とは別の話。PP/PT の A側自己交差は縮退辺除去で解消済みだが、A側⟺B側の噛み合わせ評価自体は多角形交差判定では未対応) | 確定(LT100 含む) |
+| 継手 3D モデルの幾何整合性(PP) | `FrontWall.JointFit.PpPipeCenterDistance` で検証済み。A側・B側とも継手金物はφ165.2mm鋼管(`JointCatalog.Pipe`)であり、有効幅 B のピッチで配置すると2本の鋼管の中心間距離が**外径Dに依らず一定(約82.7mm)** になり、これは鋼管自身の半径(82.6mm)にほぼ一致する。JointGeometry の J=0.2478m がこの関係になるよう K011 カタログ側で調整済みであることの裏付け。中心間距離がパイプ直径(165.2mm)より明確に短い、つまり**2D断面で重なる**のは、PP形が「差し込んで隙間なく収まる」LT型とは異なり「2本の鋼管が絡み合う」構造のため正常(多角形交差判定を使わない理由そのもの)。**PT形(B側がT形鋼で非対称)は本関数の対象外**、別途の評価が必要 | 確定 |
 | 継手の要否・雌雄 | 施工順位から一意(`pieceIndex > 1` で −Y 側、`pieceIndex < pieceCount` で +Y 側) | 確定 |
 | 継手質量(側別) | A 側(+Y): LT = 山形鋼×2 / PP・PT = 鋼管。B 側(−Y): LT・PT = T 形鋼 / PP = 鋼管 | 確定 |
 | 杭先端標高 Z_tip | `PileGeometry.TipFromHead(Z_head, L, θ)`。直杭のため `Z_head − L` の単純計算(内部表現は Z_head が正、Z_tip がこの計算値) | 確定 |
@@ -1012,7 +1013,7 @@ CSV の行順は問わない(標高上端の降順に自動で並べ替えたう
 **3 プロジェクト構成**(2026-07-29、Dynamo ノードを Plugin から分離): Core 層は AutoCAD 非依存のため WSL / Linux でもビルド・テストできる。Plugin 層(AutoCAD コマンド)は AutoCAD 本体 DLL が必要、Dynamo 層(Zero Touch Node)は `DynamoServices.dll` のみが必要で、いずれも無い環境ではスタブで構文検証まで行う。
 
 ```bash
-# Core + テスト(AutoCAD 不要。671 件が green であること)
+# Core + テスト(AutoCAD 不要。674 件が green であること)
 dotnet test tests/SheetPileQuayWall.Core.Tests -c Release
 
 # Plugin(AutoCAD コマンド)の構文検証(AutoCAD 不要。スタブとリンクする。配布不可)
@@ -1101,7 +1102,7 @@ AutoCAD コマンド(NETLOAD、`SheetPileQuayWall.Plugin.dll`)と Dynamo ノー�
 │                                         柱状図解析・打設歩掛積算 4 系統)。すべて
 │                                         AutoCAD 非依存の純計算(Core 呼び出しのみ)
 ├── stubs/                               AutoCAD/Dynamo API スタブ(構文検証専用。配布禁止)
-├── tests/SheetPileQuayWall.Core.Tests/  xUnit 671 ケース + fixtures/
+├── tests/SheetPileQuayWall.Core.Tests/  xUnit 674 ケース + fixtures/
 ├── scripts/
 │   ├── port-from-legacy.sh              007/008 からの冪等移植
 │   └── verify-dll-versions.ps1          参照 DLL バージョン実測(CLAUDE.PRIVATE.md §9)
@@ -1207,6 +1208,13 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 ## 10. 旧版 README からの変更点
 
 それ以前の機能追加履歴(帳票 CSV 取り込み・付帯船舶・控え杭打設歩掛・柱状図解析ノード・Dynamo 節全面改訂の経緯)は git log と [`docs/implementation-plan.md`](docs/implementation-plan.md) の変更履歴を参照。
+
+**PP形継手の3Dモデル幾何整合性を検証**(新規 Core `JointFit.PpPipeCenterDistance`。実機での質問がきっかけ)
+
+- 実機で `SPQW_QUAYWALL_Estimate` 等を動かして確認する中で、PP形継手の「継手間隔」(継手有効間隔 J=0.2478m、外径Dに依らず一定)が実際の3Dソリッド生成とどう整合するかを問われ、`JointShapes`(DXF抽出データ)と`JointPlacement`(配置変換式)を使って手計算で検証した。
+- PP形はA側・B側とも継手金物がφ165.2mm鋼管(`JointCatalog.Pipe`)であるため、有効幅Bのピッチで前壁を配置したときの2本の鋼管の中心間距離を計算したところ、**外径Dに依らず一定の約82.7mm**になり、これは鋼管自身の半径(82.6mm)にほぼ一致することを確認した。中心間距離がパイプ直径(165.2mm)より明確に短い、つまり2D断面で重なるのは、PP形が「差し込んで隙間なく収まる」LT型とは異なり「2本の鋼管が絡み合う」構造のためであり、正常な設計(既存の`JointFit`が多角形交差判定をPP/PTに使わない理由そのもの)。
+- この関係を`JointFit.PpPipeCenterDistance(D_m)`として実装し、`JointFitTests`にT1304〜T1306(Dに依らず一定・パイプ半径と一致・パイプ直径未満であることを固定)を追加した。**PT形(B側がT形鋼で非対称)は本関数の対象外**であり、別途の評価が必要(未着手)。
+- Core層のみの変更。テストは671→**674ケース**。
 
 **実機バグ修正(続報): Dynamo Zero Touch Node を独立プロジェクト `SheetPileQuayWall.Dynamo` へ分離**(新規 `src/SheetPileQuayWall.Dynamo/`、`SheetPileQuayWall.Plugin.csproj` から Dynamo 関連の参照・設定を削除)
 

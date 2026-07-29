@@ -13,6 +13,14 @@
 // 2 つの多角形集合について、(1) 頂点が相手の多角形内部にあるか、
 // (2) 辺同士が交差するか、の両方を調べて干渉の有無を判定する。
 // 交差しない場合は最近接距離(辺同士の最短距離)を最小離隔として返す。
+//
+// PpPipeCenterDistance は上記とは別の検証(2026-07-29 追加)。P-P形は A側・B側とも
+// φ165.2mm鋼管(JointCatalog.Pipe)であり、2本の鋼管が「絡み合う」構造のため
+// 2D断面は正しい組立でも重なる(= 上記の交差判定はそもそも使えない)。代わりに
+// 2本の鋼管の中心間距離を計算し、パイプ半径(82.6mm)にほぼ一致することを確認する
+// (JointGeometry の J=0.2478m が、この中心間距離をパイプ半径に保つよう
+// K011 カタログ側で調整済みであることの裏付け)。P-T形は B側が T形鋼(パイプではない)
+// のため本関数の対象外(A側どうしの比較という前提が成立しない)。
 
 namespace SheetPileQuayWall.Core.FrontWall
 {
@@ -42,6 +50,29 @@ namespace SheetPileQuayWall.Core.FrontWall
                     "最小離隔を定義できません。");
             }
             return minClearance_m;
+        }
+
+        // P-P形の継手金物(φ165.2mm鋼管)どうしの中心間距離 [m]。
+        // A側・B側とも JointShapes の先頭要素(外径 R=0.0826 の円弧)が鋼管の外周を表す
+        // (JointShapes.cs は自動生成・手編集禁止のため、この前提の変化は
+        // JointFitTests の回帰テストで検出する)。
+        public static double PpPipeCenterDistance(double D_m)
+        {
+            double r = D_m / 2.0;
+            double j = JointGeometry.JointSpacing(D_m, JointType.PP);
+            double b = D_m + j;
+
+            JointArc2d pipeA = (JointArc2d)JointShapes.CurvesA(JointType.PP)[0];
+            JointArc2d pipeB = (JointArc2d)JointShapes.CurvesB(JointType.PP)[0];
+
+            double xA = JointPlacement.TransformX(pipeA.Cx, pipeA.Cy, r, System.Math.PI / 2.0);
+            double yA = JointPlacement.TransformY(pipeA.Cx, pipeA.Cy, r, System.Math.PI / 2.0);
+            double xB = JointPlacement.TransformX(pipeB.Cx, pipeB.Cy, r, -System.Math.PI / 2.0);
+            double yB = JointPlacement.TransformY(pipeB.Cx, pipeB.Cy, r, -System.Math.PI / 2.0) + b;
+
+            double dx = xB - xA;
+            double dy = yB - yA;
+            return System.Math.Sqrt(dx * dx + dy * dy);
         }
 
         private static (bool Overlaps, double MinClearance_m) Evaluate(JointType jt, double D_m)
