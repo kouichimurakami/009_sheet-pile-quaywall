@@ -121,6 +121,28 @@ namespace SheetPileQuayWall.Core.Tests
             Xunit.Assert.True(found);
         }
 
+        // T1301: 矢板本数と配置間隔(何本ごと)からタイロッド組数を自動算定する
+        //        (2026-07-29。1本目に配置し、以降 n 本ごとに配置した場合に必要な組数)
+        [Xunit.Fact]
+        public void T1301_CountFor_DerivesCountFromPieceCountAndEveryN()
+        {
+            // 12 本の壁、3 本ごと → 1, 4, 7, 10 本目の 4 組
+            Xunit.Assert.Equal(4,
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.CountFor(12, 3));
+
+            // 1 本ごと(新デフォルト) → 全本数ぶん
+            Xunit.Assert.Equal(115,
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.CountFor(115, 1));
+
+            // ちょうど割り切れる場合(10 本、5 本ごと)→ 1, 6 の 2 組
+            Xunit.Assert.Equal(2,
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.CountFor(10, 5));
+
+            // 単独杭(1 本)は 1 組
+            Xunit.Assert.Equal(1,
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.CountFor(1, 3));
+        }
+
         // T1276: 前壁の有効幅からタイロッド・控え杭が同じ間隔で並ぶ(連結テスト)
         [Xunit.Fact]
         public void T1276_SameEveryN_ProducesIdenticalSpacingForBothMembers()

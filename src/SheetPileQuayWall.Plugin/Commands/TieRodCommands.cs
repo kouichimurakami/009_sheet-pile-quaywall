@@ -21,8 +21,8 @@ namespace SheetPileQuayWall.Plugin.Commands
     {
         public const string LayerName = "タイ材";
 
-        // 取付間隔の既定値(矢板 3 本ごと)
-        private const int DefaultEveryNPiles = 3;
+        // 取付間隔の既定値(矢板 1 本ごと。2026-07-29)
+        private const int DefaultEveryNPiles = 1;
 
         // ════════════════════════════════════════════════════════════════════
         // SPQW_TIEROD_Create: 前壁選択 → 入力 → 組数分の Solid3d 生成
@@ -368,11 +368,14 @@ namespace SheetPileQuayWall.Plugin.Commands
             ed.WriteMessage(
                 $"\n  → 取付間隔 = {p.PilePitch:F4} m × {pickedN} 本 = {p.TieSpacing:F4} m");
 
-            int count;
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskInt(
-                ed, $"\nタイロッド組数 (組) <{p.TieCount}>: ",
-                p.TieCount, 1, 200, out count)) return false;
-            p.TieCount = count;
+            // タイロッド組数は前壁の総本数と取付間隔(何本ごと)から自動算定する
+            // (2026-07-29。1本目に配置し、以降 pickedN 本ごとに配置した場合に
+            // 矢板全本数を覆うのに必要な組数)。プロンプトは廃止した。
+            p.TieCount = SheetPileQuayWall.Core.TieRod.TieRodPitch.CountFor(
+                front.PieceCount, pickedN);
+            ed.WriteMessage(
+                $"\n  → タイロッド組数 = 前壁 {front.PieceCount} 本 ÷ {pickedN} 本ごと → " +
+                $"{p.TieCount} 組(自動算定)");
 
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
                 ed, $"\nH.W.L. 標高 (m, D.L. 基準) <{p.Hwl:F3}>: ",
@@ -384,16 +387,13 @@ namespace SheetPileQuayWall.Plugin.Commands
                 p.TieElevation, -5.0, 10.0, out value)) return false;
             p.TieElevation = value;
 
-            // 腹起し溝形鋼高さ・定着プレート厚・定着ワッシャー厚・ナット高さ・調節長は
-            // プロンプトを廃止し、既定値(_Create)または前回保存値(_Action)を固定で
-            // 使う(2026-07-29)。表内の径ではナット高さ・調節長は引き続き
-            // ApplyStandardNutHeight() が積算基準表の値へ自動設定する。全長算出式
-            // (積算基準 3-4.5-(13))自体は変更していない。
-
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
-                ed, $"\n取付点反力 Ap (kN/m、0 で張力照査なし) <{p.AnchorReaction:F1}>: ",
-                p.AnchorReaction, 0.0, 10000.0, out value)) return false;
-            p.AnchorReaction = value;
+            // 腹起し溝形鋼高さ・定着プレート厚・定着ワッシャー厚・ナット高さ・調節長・
+            // 取付点反力 Ap はプロンプトを廃止し、既定値(_Create)または前回保存値
+            // (_Action)を固定で使う(2026-07-29)。取付点反力の既定値 0.0 は「張力照査
+            // なし」を意味し、_Create では常にこの既定のまま(張力照査が必要な場合は
+            // _Action または XData 直接編集で入力する)。表内の径ではナット高さ・調節長は
+            // 引き続き ApplyStandardNutHeight() が積算基準表の値へ自動設定する。
+            // 全長算出式(積算基準 3-4.5-(13))・張力照査の計算式自体は変更していない。
 
             int colorIdx;
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskInt(

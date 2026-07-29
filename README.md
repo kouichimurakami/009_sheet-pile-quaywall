@@ -632,12 +632,12 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 | `jointType` | 継手形式 | − | LT75 | LT65 / LT75 / LT100 / PP / PT |
 | `grade` | 鋼種 | − | SKY400 | SKY400 / SKY490 |
 | `inclinationDeg` | 傾斜角 θ | deg | 0.0 | 0〜15(Y 軸周り) |
-| `wallLength` | 施設全長 | m | 10.000 | 0.1〜1000(`_Create` のみ。**外径 D より先に入力**、2026-07-29) |
+| `wallLength` | 施設全長 | m | 100.000(2026-07-29、旧 10.000) | 0.1〜1000(`_Create` のみ。**外径 D より先に入力**、2026-07-29) |
 | `effectiveWidth` | 鋼管矢板 有効幅 B(継手考慮) | m | 外径・継手形式から自動算出 | 0.5〜2.5(`_Create` のみ) |
 | `pieceCount` | 総本数 | 本 | **`_Create` では自動算出** | 1〜500(`_Action` のみ入力) |
 | `pieceIndex` | 施工順位 | 本目 | **`_Create` では 1 始まりで自動採番** | 1〜`pieceCount`(`_Action` のみ入力) |
 | `colorIndex` | 本管の色 | ACI | 8 | 1〜255 |
-| `headElevation` | 杭上端(杭頭)標高 Z_head | m(D.L.) | −18.0 + L·cosθ | 内部の Z_tip 換算値が −80〜10(2026-07-29、`tipElevation` から変更) |
+| `headElevation` | 杭上端(杭頭)標高 Z_head | m(D.L.) | −18.0 + L·cosθ = **2.000**(既定 L=20.0m・θ=0° のとき) | 内部の Z_tip 換算値が −80〜10(2026-07-29、`tipElevation` から変更) |
 | `planPoint` | 始点(1 本目の杭中心) | m | − | UCS ピック → WCS 変換(Z は使わない) |
 
 **`_Create` の壁一括生成**(`FrontWall.WallLayout`)
@@ -740,18 +740,17 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 | `spanLength` | 法線直角方向延長 span | m | 10.000 | 3.000〜40.000 |
 | `pileDiameter` | 海側鋼管矢板径 | m | **前壁から自動代入(入力を求めない)** | 前壁の外径と一致 |
 | `pilePitch` | 鋼管矢板ピッチ | m | **前壁から自動代入(入力を求めない)** | 前壁が壁一括生成で実際に使った有効幅 B(`FrontWallRef.ResolveEffectiveWidth`)と一致。旧図面は外径・継手形式からの算出値にフォールバック |
-| `everyNPiles` | タイロッド取付間隔(矢板何本ごと) | 本 | 3 | 1〜50、かつ間隔が 0.600〜20.000 m |
+| `everyNPiles` | タイロッド取付間隔(矢板何本ごと) | 本 | 1(2026-07-29、旧 3) | 1〜50、かつ間隔が 0.600〜20.000 m |
 | `tieSpacing` | タイロッド取付間隔 | m | **`pilePitch × everyNPiles` で自動算出** | 派生量(ピッチの整数倍が構造的に保証される) |
-| `tieCount` | 組数 | 組 | 1 | 1〜200 |
+| `tieCount` | 組数 | 組 | **前壁の総本数と `everyNPiles` から自動算定(入力を求めない)**(2026-07-29) | `TieRodPitch.CountFor(pieceCount, everyNPiles)` = `(pieceCount-1)/everyNPiles + 1`(1 本目に配置し以降 n 本ごと) |
 | `hwl` | H.W.L. 標高 | m(D.L.) | 2.000 | 0.000〜5.000 |
 | `tieElevation` | タイロッド軸心標高 | m(D.L.) | `hwl` + 0.500 | −5.000〜10.000 |
-| `anchorReaction` | 取付点反力 Ap | kN/m | 0.0 | 0〜10000。0 で張力照査なし |
 | `layerColor` | 色 | ACI | 8 | 1〜255 |
 | `positionY` | 1 組目の位置 Y | m | − | UCS ピック(**X は前壁から自動計算**。`_Action` では保存値を保持) |
 
 `span_length` は「前壁矢板中心 〜 陸側定着面」の水平距離(積算基準 3-4.5-(13))。定着金物はこの面より陸側へ張り出す。
 
-**プロンプト廃止後も内部の計算式(全長・質量・張力照査)は変更していない**(2026-07-29)。廃止した 8 項目は `TieRodParameters` のプロパティとしては残り、`SPQW_TIEROD_Create` では以下の固定値、`SPQW_TIEROD_Action` では前回保存値(XData)がそのまま計算に使われる。
+**プロンプト廃止後も内部の計算式(全長・質量・張力照査)は変更していない**(2026-07-29)。廃止した 9 項目(鋼種・設計基準・荷重状態・腹起し溝形鋼高さ・定着プレート厚・定着ワッシャー厚・ナット高さ・調節長・取付点反力 Ap)は `TieRodParameters` のプロパティとしては残り、`SPQW_TIEROD_Create` では以下の固定値、`SPQW_TIEROD_Action` では前回保存値(XData)がそのまま計算に使われる。
 
 | 項目 | 固定値(`_Create`) | 備考 |
 |---|---|---|
@@ -763,6 +762,7 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 | 定着ワッシャー厚 t1 | 0.006 m | 同上 |
 | ナット高さ | 積算基準表(φ38〜φ65)から自動設定。表外径は 0.055 m | 同上。`ApplyStandardNutHeight()` は従来どおり動作 |
 | 調節長 | 同上 | 同上 |
+| 取付点反力 Ap | 0.0 kN/m(張力照査なし) | 張力照査要否を切り替える値。`_Create` では常に 0.0 |
 
 ### 5.4 控え杭
 
@@ -1195,6 +1195,15 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 ## 10. 旧版 README からの変更点
 
 それ以前の機能追加履歴(帳票 CSV 取り込み・付帯船舶・控え杭打設歩掛・柱状図解析ノード・Dynamo 節全面改訂の経緯)は git log と [`docs/implementation-plan.md`](docs/implementation-plan.md) の変更履歴を参照。
+
+**既定値の変更とタイロッド組数の自動算定、取付点反力プロンプトの廃止**(`FrontWallCommands.cs` / `TieRodCommands.cs`、新規 Core `TieRodPitch.CountFor`)
+
+- `SPQW_FRONTWALL_Create` の施設全長の既定値を 10.000m → **100.000m** に変更した。
+- `SPQW_TIEROD_Create` の取付間隔(矢板何本ごと)の既定値を 3 → **1**(全本数に配置)に変更した。
+- **タイロッド組数の入力を廃止**し、前壁の総本数(`PieceCount`)と取付間隔(何本ごと)から自動算定するようにした。新設 `TieRodPitch.CountFor(pieceCount, everyNPiles) = (pieceCount-1)/everyNPiles + 1`(1 本目に配置し以降 n 本ごとに配置した場合に全本数を覆うのに必要な組数)。例: 12 本の壁を 3 本ごとなら 4 組(1・4・7・10 本目)。
+- **取付点反力 Ap のプロンプトを廃止**した(2026-07-29 の 8 項目削減と同じ方針。`TieRodParameters.AnchorReaction` フィールドと張力照査の計算式は変更していない)。`_Create` では既定値 0.0(張力照査なし)のまま、`_Action` は前回保存値を使う。
+- 杭上端標高 Z_head の既定値は前壁の Z_tip 既定値(−18.0m)・全長既定値(20.0m)・傾斜角既定値(0°)から `−18.0 + 20.0×cos(0°) = 2.000m` と計算され、**変更なしで既に 2.000m**(依頼のとおり)。
+- Core 層のテストは新規 `TieRodPitch.CountFor` の T1301 を追加し 668 → **669 ケース**。
 
 **`SPQW_ANCHORPILE_Create` の入力を大幅削減: タイロッド選択で軸心標高・配置間隔・本数を自動設定、位置 Y は壁の 1 本目に自動整列**(`AnchorPileCommands.cs` / `DrawingHelper.cs` のみ、`AnchorInput` のフィールドは変更なし)
 

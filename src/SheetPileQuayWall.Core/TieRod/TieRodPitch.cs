@@ -36,6 +36,16 @@ namespace SheetPileQuayWall.Core.TieRod
         }
 
         /// <summary>
+        /// 矢板本数と配置間隔(何本ごと)から、必要なタイロッド組数を求める(2026-07-29)。
+        /// 1 本目の矢板に 1 組目を配置し、以降 everyNPiles 本ごとに配置した場合に
+        /// 矢板 pieceCount 本の壁を覆うのに必要な組数(位置は 1, 1+n, 1+2n, ... の昇順)。
+        /// </summary>
+        public static int CountFor(int pieceCount, int everyNPiles)
+        {
+            return (pieceCount - 1) / everyNPiles + 1;
+        }
+
+        /// <summary>
         /// 取付間隔が矢板ピッチの何本ぶんかを逆算する (CSV 取り込み値・既存 XData の表示用)。
         /// 整数倍でない値に対しては最も近い整数を返すため、非整数倍かどうかは
         /// SpacingDeviation で別途判定すること。

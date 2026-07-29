@@ -20,8 +20,8 @@ namespace SheetPileQuayWall.Plugin.Commands
     {
         public const string LayerName = "前壁鋼管矢板";
 
-        // SPQW_FRONTWALL_Create の施設全長の既定値 [m]
-        private const double DefaultWallLength_m = 10.000;
+        // SPQW_FRONTWALL_Create の施設全長の既定値 [m](2026-07-29)
+        private const double DefaultWallLength_m = 100.000;
 
         // ════════════════════════════════════════════════════════════════════
         // SPQW_FRONTWALL_Create: 対話入力 → 施設全長と有効幅から本数を自動算出 →
