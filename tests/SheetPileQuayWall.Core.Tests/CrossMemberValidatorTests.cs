@@ -88,6 +88,40 @@ namespace SheetPileQuayWall.Core.Tests
             Xunit.Assert.Contains("有効幅", e);
         }
 
+        // T999: 前壁が壁一括生成で実際に使った有効幅 B(EffectiveWidthM)がある場合、
+        //       算出値ではなくその値と照合する。カスタム B とタイロッドの PilePitch が
+        //       一致していれば正常(2026-07-29 発見の修正確認)
+        [Xunit.Fact]
+        public void T999_ValidatePilePitch_UsesActualEffectiveWidthWhenSet()
+        {
+            SheetPileQuayWall.Core.FrontWallRef front = Front();
+            front.EffectiveWidthM = 0.900;   // 算出値 1.2478 とは異なるカスタム値
+
+            SheetPileQuayWall.Core.TieRod.TieRodParameters p = TieRod();
+            p.PilePitch = 0.900;             // front の実際値と一致させる
+
+            Xunit.Assert.Null(
+                SheetPileQuayWall.Core.CrossMemberValidator.ValidatePilePitch(front, p));
+        }
+
+        // T1000: 上のケースで、タイロッド側が「算出値」のまま(EffectiveWidthM を
+        //        無視して前壁の外径・継手形式から再計算した値)を使うと、実際の
+        //        矢板間隔(カスタム B)とはズレているのに、以前の実装はこれを
+        //        検出できなかった。EffectiveWidthM 参照後は正しく不一致として検出する
+        [Xunit.Fact]
+        public void T1000_ValidatePilePitch_DetectsMismatchAgainstActualEffectiveWidth()
+        {
+            SheetPileQuayWall.Core.FrontWallRef front = Front();
+            front.EffectiveWidthM = 0.900;   // 実際に使われた値
+
+            SheetPileQuayWall.Core.TieRod.TieRodParameters p = TieRod();
+            p.PilePitch = EffectiveWidthPP_m; // 外径・継手形式からの算出値のまま(古い挙動)
+
+            string? e = SheetPileQuayWall.Core.CrossMemberValidator.ValidatePilePitch(front, p);
+            Xunit.Assert.NotNull(e);
+            Xunit.Assert.Contains("有効幅", e);
+        }
+
         // T994: タイロッド軸心標高と控え杭の Z_tr が一致していれば正常
         [Xunit.Fact]
         public void T994_ValidateTieElevation_Match()

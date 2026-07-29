@@ -58,10 +58,10 @@ namespace SheetPileQuayWall.Plugin.Commands
                 return;
             }
 
-            // 配置間隔・本数(タイロッドと同じく「矢板何本ごと」で受ける)
-            double pilePitch_m = SheetPileQuayWall.Core.FrontWall.JointParameters.EffectiveWidth(
-                front.OuterDm,
-                SheetPileQuayWall.Core.FrontWall.JointParameters.FromCode(front.JointCode));
+            // 配置間隔・本数(タイロッドと同じく「矢板何本ごと」で受ける)。
+            // ピッチは前壁が壁一括生成で実際に使った有効幅 B を優先する
+            // (TieRodCommands.PromptParameters と同じ理由。2026-07-29 発見)。
+            double pilePitch_m = front.ToRef().ResolveEffectiveWidth();
             ed.WriteMessage(
                 $"\n  前壁から取得: 矢板ピッチ (有効幅 B) {pilePitch_m:F4} m");
 

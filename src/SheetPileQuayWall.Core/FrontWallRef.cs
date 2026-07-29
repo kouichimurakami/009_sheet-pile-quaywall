@@ -17,5 +17,22 @@ namespace SheetPileQuayWall.Core
         public double InclDeg;                         // 傾斜角 θ_f [deg]
         public double LengthM;                         // 全長 L_f [m]
         public FrontWall.JointType JointType;          // 継手形式 (既定 LT65)
+
+        // 壁一括生成(WallLayout)で実際に配置に使われた有効幅 B [m]。
+        // 0 以下(未設定)の場合は ResolveEffectiveWidth が外径・継手形式からの
+        // 算出値にフォールバックする。SPQW_FRONTWALL_Create の有効幅 B は入力値を
+        // 優先し外径・継手形式からの算出値と食い違い得るため(README §5.1)、
+        // タイロッド・控え杭・施設積算はこのフィールド経由で「実際に使われた値」を
+        // 参照すること。算出値を都度呼び直すと、入力値と食い違うケースで
+        // CrossMemberValidator が実際の矢板間隔とのズレを検出できなくなる
+        // (2026-07-29 発見)。
+        public double EffectiveWidthM;
+
+        public double ResolveEffectiveWidth()
+        {
+            return EffectiveWidthM > 0.0
+                ? EffectiveWidthM
+                : FrontWall.JointParameters.EffectiveWidth(OuterDm, JointType);
+        }
     }
 }

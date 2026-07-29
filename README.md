@@ -3,7 +3,7 @@
 **鋼管矢板式岸壁**(前壁鋼管矢板 + タイロッド + 控え杭)を、単一の DLL で完結してパラメトリック 3D モデル生成・積算(施工歩掛計算)できる AutoCAD 2025 / Civil 3D 2025 プラグイン。
 
 - ターゲット: C# / .NET 8.0、`net8.0-windows`、x64、AutoCAD 2025 .NET / Civil 3D 2025 / Dynamo 3.3(Zero Touch Node)
-- 構成: **Core(AutoCAD 非依存の計算層)/ Plugin(AutoCAD 依存層)** の 2 プロジェクト分割。Core は BCL のみを参照し、WSL / Linux でもテストできる(**xUnit 662 ケース green**)
+- 構成: **Core(AutoCAD 非依存の計算層)/ Plugin(AutoCAD 依存層)** の 2 プロジェクト分割。Core は BCL のみを参照し、WSL / Linux でもテストできる(**xUnit 668 ケース green**)
 - `006_steel-pipe-pile` / `007_steel-pipe-sheet-pile` / `008_tairod` の後継・統合版であり、**009 単独でビルド・実行できる**(3 リポジトリへのプロジェクト参照・アセンブリ参照は持たない)
 
 > **使用前に §9「注意点・既知の課題」を必ず読むこと。**実機動作は未検証であり、積算基準の一部に OCR から復元できなかった表がある。
@@ -178,7 +178,7 @@
 
 | 部材 | RegApp 名 | 主なキー |
 |---|---|---|
-| 前壁 | `SPQW_FRONTWALL` | `fmt`, `outer_d`, `wall_t`, `length`, `joint`, `grade`, `incl_deg`, `piece_index`, `piece_count`, `color`, `tip_x`/`tip_y`/`tip_z` + **World 座標点(DxfCode 1011)** |
+| 前壁 | `SPQW_FRONTWALL` | `fmt`, `outer_d`, `wall_t`, `length`, `joint`, `grade`, `incl_deg`, `piece_index`, `piece_count`, `effective_width`, `color`, `tip_x`/`tip_y`/`tip_z` + **World 座標点(DxfCode 1011)** |
 | タイロッド | `SPQW_TIEROD` | `fmt` + 008 の 18 項目 + `front_handle`, `pos_y`, `rod_index` |
 | 控え杭 | `SPQW_ANCHORPILE` | `fmt`, `outer_d`, `wall_t`, `length`, `incl_deg`, `closed_tip`, `span`, `tie_elev`, `tip_elev`, `color`, `pos_y`, `front_handle` |
 
@@ -650,7 +650,7 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 
 端数は**切り上げ**(施設全長を必ずカバーするが終点は行き過ぎる。決定日 2026-07-29)。誤差許容 1mm を差し引いてから割るため、ちょうど整数倍のとき(8.752 ÷ 0.8752 = 10)に浮動小数誤差で 1 本増えることはない。
 
-有効幅 B は入力値を優先する。外径・継手形式から算出される値と 1mm を超えて食い違う場合は**警告を表示して続行**する(エラー停止しない)。ただしその状態では `SPQW_TIEROD_Create` の矢板ピッチ照合(`CrossMemberValidator.ValidatePilePitch` が `EffectiveWidth` と照合)が通らなくなるため、タイロッドまで作るなら既定値のまま Enter で採用すること。
+有効幅 B は入力値を優先する。外径・継手形式から算出される値と 1mm を超えて食い違う場合は**警告を表示して続行**する(エラー停止しない)。**実際に確定した B は XData(`effective_width`)に記録され、`SPQW_TIEROD_Create` / `SPQW_ANCHORPILE_Create` / `SPQW_QUAYWALL_Estimate` はこの値を使う**(`FrontWallRef.ResolveEffectiveWidth`)ため、カスタム B のままタイロッド・控え杭・施設積算まで一貫して整合する(2026-07-29、以前は再計算した算出値を使っておりカスタム B との食い違いを検出できなかった。§9.3 参照)。旧図面(`effective_width` キーが無い)は算出値にフォールバックする。
 
 本数が 500 本(`PieceAssignment.PieceCount_Max`)を超える組合せは**エラー停止**する(施設全長を分割して生成する)。
 
@@ -740,7 +740,7 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 | `rodDiameter` | タイロッド径 | m | 0.048 | 0.020〜0.100(カタログ規格径 φ25〜φ90 の 19 種のみ可) |
 | `spanLength` | 法線直角方向延長 span | m | 10.000 | 3.000〜40.000 |
 | `pileDiameter` | 海側鋼管矢板径 | m | **前壁から自動代入(入力を求めない)** | 前壁の外径と一致 |
-| `pilePitch` | 鋼管矢板ピッチ | m | **前壁から自動代入(入力を求めない)** | 前壁の有効幅 B と一致 |
+| `pilePitch` | 鋼管矢板ピッチ | m | **前壁から自動代入(入力を求めない)** | 前壁が壁一括生成で実際に使った有効幅 B(`FrontWallRef.ResolveEffectiveWidth`)と一致。旧図面は外径・継手形式からの算出値にフォールバック |
 | `everyNPiles` | タイロッド取付間隔(矢板何本ごと) | 本 | 3 | 1〜50、かつ間隔が 0.600〜20.000 m |
 | `tieSpacing` | タイロッド取付間隔 | m | **`pilePitch × everyNPiles` で自動算出** | 派生量(ピッチの整数倍が構造的に保証される) |
 | `tieCount` | 組数 | 組 | 1 | 1〜200 |
@@ -997,7 +997,7 @@ CSV の行順は問わない(標高上端の降順に自動で並べ替えたう
 Core 層は AutoCAD 非依存のため WSL / Linux でもビルド・テストできる。Plugin 層は AutoCAD が必要で、無い環境ではスタブで構文検証まで行う。
 
 ```bash
-# Core + テスト(AutoCAD 不要。662 件が green であること)
+# Core + テスト(AutoCAD 不要。668 件が green であること)
 dotnet test tests/SheetPileQuayWall.Core.Tests -c Release
 
 # Plugin の構文検証(AutoCAD 不要。スタブとリンクする。配布不可)
@@ -1080,7 +1080,7 @@ AutoCAD コマンド(NETLOAD)と Dynamo ノード(Import Library)は独立した
 │       │                                 打設歩掛積算 4 系統。すべて AutoCAD 非依存の純計算)
 │       └── DrawingHelper.cs / Prompt.cs / SolidBuilder.cs
 ├── stubs/                               AutoCAD API スタブ(構文検証専用。配布禁止)
-├── tests/SheetPileQuayWall.Core.Tests/  xUnit 662 ケース + fixtures/
+├── tests/SheetPileQuayWall.Core.Tests/  xUnit 668 ケース + fixtures/
 ├── scripts/
 │   ├── port-from-legacy.sh              007/008 からの冪等移植
 │   └── verify-dll-versions.ps1          参照 DLL バージョン実測(CLAUDE.PRIVATE.md §9)
@@ -1184,6 +1184,14 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 ## 10. 旧版 README からの変更点
 
 それ以前の機能追加履歴(帳票 CSV 取り込み・付帯船舶・控え杭打設歩掛・柱状図解析ノード・Dynamo 節全面改訂の経緯)は git log と [`docs/implementation-plan.md`](docs/implementation-plan.md) の変更履歴を参照。
+
+**バグ修正: カスタム有効幅 B を使うとタイロッド・控え杭・施設積算が実際の矢板間隔とズレる不整合**(`FrontWallRef.EffectiveWidthM` 新設)
+
+- `SPQW_FRONTWALL_Create` の壁一括生成は有効幅 B の入力値を優先できる(算出値と食い違えば警告のみで続行)が、実際に使われた値は XData に保存されておらず、`SPQW_TIEROD_Create` / `SPQW_ANCHORPILE_Create` / `SPQW_QUAYWALL_Estimate` はいずれも前壁の外径・継手形式から有効幅を**再計算**していた。カスタム B を使った場合、この再計算値は実際の矢板間隔と一致せず、しかも `CrossMemberValidator.ValidatePilePitch` はタイロッド側の値も同じ再計算ロジックで自動代入されるため常に一致してしまい、ズレを検出できていなかった(実際にシミュレーションし、2組目以降のタイロッドが矢板の中心から外れることを確認)。
+- `FrontWallRef` / `QuayWallComposition` に `EffectiveWidthM` を追加し、`ResolveEffectiveWidth()` で「設定されていれば実測値、未設定(0以下)なら従来どおり算出値」にフォールバックする設計とした。既存コード・既存テストへの後方互換を保っている。
+- `FrontWallRecord`(XData)に `effective_width` キーを追加。壁一括生成時に確定した有効幅を記録し、`ToRef()` で `FrontWallRef` へ伝播する。旧図面(キーが無い)は自動的にフォールバックする。
+- `TieRodCommands` / `AnchorPileCommands` / `QuayWallCommands` の再計算箇所を `ResolveEffectiveWidth()` 経由に置き換えた。
+- 新規 `FrontWallRefTests`(T1298〜T1300)、`CrossMemberValidatorTests` に T999・T1000、`QuayWallEstimateTests` に T1025 を追加。テスト 662 → **668 ケース**。
 
 **開発環境トラブルの再発防止**(`scripts/update-project.bat` 新設 + `fix-restore.bat` 強化。コード変更なし)
 

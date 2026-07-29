@@ -51,6 +51,12 @@ namespace SheetPileQuayWall.Plugin.Commands
                 return;
             }
 
+            // 実際に配置に使った有効幅を記録する。入力値が外径・継手形式からの
+            // 算出値と食い違っていても、タイロッド・控え杭・施設積算はこの値を
+            // 参照して整合を取る(算出値を再計算すると実際の矢板間隔とズレる。
+            // 2026-07-29 発見)。
+            record.EffectiveWidthM = effectiveWidth_m;
+
             double startY = record.TipPoint.Y;
 
             using (Autodesk.AutoCAD.DatabaseServices.Transaction tr =

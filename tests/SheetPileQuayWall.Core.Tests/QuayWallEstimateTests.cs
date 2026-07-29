@@ -108,5 +108,31 @@ namespace SheetPileQuayWall.Core.Tests
                     + q.AnchorBodyKg + q.AnchorPlateKg,
                 q.TotalKg, 6);
         }
+
+        // T1025: 壁一括生成で有効幅 B をカスタム値にしていた場合、施設延長は
+        //        FrontEffectiveWidthM(実際に使われた値)を使う。外径・継手形式からの
+        //        算出値を再計算すると実際の矢板間隔とズレる(2026-07-29 発見)。
+        //        未設定(0.0)なら従来どおり算出値にフォールバックする。
+        [Xunit.Fact]
+        public void T1025_WallLength_UsesActualEffectiveWidthWhenSet()
+        {
+            SheetPileQuayWall.Core.QuayWallComposition c = Composition();
+            double autoB = SheetPileQuayWall.Core.FrontWall.JointParameters.EffectiveWidth(
+                c.FrontOuterDm, c.FrontJointType);
+
+            // 未設定(既定 0.0): 従来どおり算出値
+            Xunit.Assert.Equal(autoB, c.ResolveFrontEffectiveWidth(), 9);
+            SheetPileQuayWall.Core.QuayWallQuantity fallback =
+                SheetPileQuayWall.Core.QuayWallEstimate.Compute(c);
+            Xunit.Assert.Equal(autoB * 10, fallback.WallLengthM, 6);
+
+            // カスタム値を設定: 算出値とは異なる実測値を使う
+            c.FrontEffectiveWidthM = 0.900;
+            Xunit.Assert.Equal(0.900, c.ResolveFrontEffectiveWidth(), 9);
+            SheetPileQuayWall.Core.QuayWallQuantity custom =
+                SheetPileQuayWall.Core.QuayWallEstimate.Compute(c);
+            Xunit.Assert.Equal(0.900 * 10, custom.WallLengthM, 6);
+            Xunit.Assert.NotEqual(fallback.WallLengthM, custom.WallLengthM);
+        }
     }
 }

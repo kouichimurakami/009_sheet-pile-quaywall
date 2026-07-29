@@ -22,6 +22,18 @@ namespace SheetPileQuayWall.Core
         public FrontWall.JointType FrontJointType = FrontWall.JointType.LT75;
         public int FrontPieceCount = 1;          // 前壁の総本数 [本]
 
+        // 壁一括生成で実際に配置に使われた有効幅 B [m]。0 以下(未設定)なら
+        // FrontOuterDm/FrontJointType からの算出値にフォールバックする
+        // (FrontWallRef.ResolveEffectiveWidth と同じ理由。2026-07-29)。
+        public double FrontEffectiveWidthM;
+
+        public double ResolveFrontEffectiveWidth()
+        {
+            return FrontEffectiveWidthM > 0.0
+                ? FrontEffectiveWidthM
+                : FrontWall.JointParameters.EffectiveWidth(FrontOuterDm, FrontJointType);
+        }
+
         // タイロッド
         public int TieRodSetCount = 0;           // 組数 [組]
         public double TieRodMassPerSet = 0.0;    // 1 組あたり棒部質量 [kg](TieRodResult.RodMass)
@@ -99,8 +111,7 @@ namespace SheetPileQuayWall.Core
                     * c.FrontLengthM;
             }
 
-            double effectiveWidth = FrontWall.JointParameters.EffectiveWidth(
-                c.FrontOuterDm, c.FrontJointType);
+            double effectiveWidth = c.ResolveFrontEffectiveWidth();
             double wallLengthM = effectiveWidth * c.FrontPieceCount;
             int connections = c.FrontPieceCount > 0 ? c.FrontPieceCount - 1 : 0;
 

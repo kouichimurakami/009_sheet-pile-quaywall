@@ -40,8 +40,7 @@ namespace SheetPileQuayWall.Core
         public static string? ValidatePilePitch(
             FrontWallRef front, TieRod.TieRodParameters tieRod)
         {
-            double b_m = FrontWall.JointParameters.EffectiveWidth(
-                front.OuterDm, front.JointType);
+            double b_m = front.ResolveEffectiveWidth();
             if (System.Math.Abs(tieRod.PilePitch - b_m) > Tol_m)
                 return $"タイロッドの矢板ピッチ {tieRod.PilePitch:F3}m が " +
                        $"前壁の有効幅 B={b_m:F3}m " +

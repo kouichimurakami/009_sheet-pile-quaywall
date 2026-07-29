@@ -350,11 +350,12 @@ namespace SheetPileQuayWall.Plugin.Commands
             // 海側鋼管矢板径・矢板ピッチは前壁から自動代入する。
             // CrossMemberValidator が前壁と 1mm 精度で照合するため、手入力を求めても
             // 「Enter 以外は全て検証エラー」になるだけだった。
-            // _Action もここを通るため、前壁を変更した場合は再計算される
+            // _Action もここを通るため、前壁を変更した場合は再計算される。
+            // ピッチは front.ToRef().ResolveEffectiveWidth() を使う — 前壁が壁一括生成で
+            // 有効幅 B をカスタム入力していた場合、外径・継手形式からの算出値では実際の
+            // 矢板間隔と食い違うため(2026-07-29 発見)。
             p.PileDiameter = front.OuterDm;
-            p.PilePitch = SheetPileQuayWall.Core.FrontWall.JointParameters.EffectiveWidth(
-                front.OuterDm,
-                SheetPileQuayWall.Core.FrontWall.JointParameters.FromCode(front.JointCode));
+            p.PilePitch = front.ToRef().ResolveEffectiveWidth();
 
             ed.WriteMessage(
                 $"\n  前壁から取得: 海側鋼管矢板径 {p.PileDiameter:F3} m / " +

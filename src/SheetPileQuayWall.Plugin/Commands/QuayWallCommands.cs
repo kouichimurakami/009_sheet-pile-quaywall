@@ -102,6 +102,9 @@ namespace SheetPileQuayWall.Plugin.Commands
             c.FrontJointType =
                 SheetPileQuayWall.Core.FrontWall.JointParameters.FromCode(f.JointCode);
             c.FrontPieceCount = f.PieceCount;
+            // 壁一括生成で実際に使われた有効幅 B があればそれを使う
+            // (無ければ 0.0 のまま → ResolveFrontEffectiveWidth が算出値へフォールバック)
+            c.FrontEffectiveWidthM = f.EffectiveWidthM;
 
             // ── タイロッド ──────────────────────────────────────────────
             int tieRodSetCount;
