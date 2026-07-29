@@ -631,14 +631,15 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 | `length` | 全長 L | m | 20.0 | 1〜80 |
 | `jointType` | 継手形式 | − | LT75 | LT65 / LT75 / LT100 / PP / PT |
 | `grade` | 鋼種 | − | SKY400 | SKY400 / SKY490 |
-| `inclinationDeg` | 傾斜角 θ | deg | 0.0 | 0〜15(Y 軸周り) |
 | `wallLength` | 施設全長 | m | 100.000(2026-07-29、旧 10.000) | 0.1〜1000(`_Create` のみ。**外径 D より先に入力**、2026-07-29) |
 | `effectiveWidth` | 鋼管矢板 有効幅 B(継手考慮) | m | 外径・継手形式から自動算出 | 0.5〜2.5(`_Create` のみ) |
 | `pieceCount` | 総本数 | 本 | **`_Create` では自動算出** | 1〜500(`_Action` のみ入力) |
 | `pieceIndex` | 施工順位 | 本目 | **`_Create` では 1 始まりで自動採番** | 1〜`pieceCount`(`_Action` のみ入力) |
 | `colorIndex` | 本管の色 | ACI | 8 | 1〜255 |
-| `headElevation` | 杭上端(杭頭)標高 Z_head | m(D.L.) | −18.0 + L·cosθ = **2.000**(既定 L=20.0m・θ=0° のとき) | 内部の Z_tip 換算値が −80〜10(2026-07-29、`tipElevation` から変更) |
+| `headElevation` | 杭上端(杭頭)標高 Z_head | m(D.L.) | Z_tip + L = **2.000**(既定 Z_tip=−18.0m・L=20.0m のとき) | 内部の Z_tip 換算値が −80〜10(2026-07-29、`tipElevation` から変更) |
 | `planPoint` | 始点(1 本目の杭中心) | m | − | UCS ピック → WCS 変換(Z は使わない) |
+
+**傾斜角 θ のプロンプトは廃止し、直杭(θ=0)のみとした**(2026-07-29)。`FrontWallRecord.InclDeg` フィールド自体は残っているが、`SPQW_FRONTWALL_Create` / `_Action` は常に `0.0` を書き込む(既存の傾斜杭図面を `_Action` で再生成すると直杭に変わる点に注意)。杭上端標高 Z_head の変換は三角関数を使わない単純な加減算(`Z_tip = Z_head − L`)になった。`SPQW_FRONTWALL_ImportCsv`(帳票 CSV 取り込み)は今回変更しておらず、`incl_deg` 列を指定すれば引き続き傾斜杭を取り込める。
 
 **`_Create` の壁一括生成**(`FrontWall.WallLayout`)
 
@@ -779,7 +780,7 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 | `closedTip` | 先端形状 | − | 開端 | 開端 / 閉端 |
 | `span` | 法線直角方向延長 | m | 10.0 | 3.0〜40.0 |
 | `tieElevation` | タイロッド軸心標高 Z_tr | m(D.L.) | **タイロッドから自動代入(入力を求めない)** | 選択したタイロッドの `TieElevation` と一致(`_Action` は前回保存値を保持) |
-| `headElevation` | 杭上端(杭頭)標高 Z_head | m(D.L.) | 前壁の Z_tip + L·cosθ | 内部の Z_tip 換算値が −80〜10(2026-07-29、`tipElevation` から変更。方式は前壁 §5.1 と同じ) |
+| `headElevation` | 杭上端(杭頭)標高 Z_head | m(D.L.) | **前壁の杭上端標高(前壁の Z_tip + L)をそのまま使用**(控え杭自身の全長・傾斜角による式では算出しない、2026-07-29) | 内部の Z_tip 換算値が −80〜10(2026-07-29、`tipElevation` から変更) |
 | `colorIndex` | 本管の色 | ACI | 8 | 1〜255 |
 | `everyNPiles` / `pileCount` | 控え杭 配置間隔・本数 | − | − | **タイロッドから自動代入(入力を求めない)**。選択したタイロッドの `TieSpacing`/`TieCount` をそのまま使う(2026-07-29、`_Create` のみ) |
 | `positionY` | 位置 Y | m | **図面内の全前壁のうち杭中心 Y が最小のもの(壁の 1 本目)に自動整列**(2026-07-29) | 派生量。2 本目以降は `始点Y + i × 配置間隔`(`_Action` は保存値を保持) |
@@ -1195,6 +1196,20 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 ## 10. 旧版 README からの変更点
 
 それ以前の機能追加履歴(帳票 CSV 取り込み・付帯船舶・控え杭打設歩掛・柱状図解析ノード・Dynamo 節全面改訂の経緯)は git log と [`docs/implementation-plan.md`](docs/implementation-plan.md) の変更履歴を参照。
+
+**`SPQW_ANCHORPILE_Create` / `_Action` の杭上端標高デフォルトを前壁と同じ値に変更**(`AnchorPileCommands.cs` のみ)
+
+- 杭上端標高 Z_head の既定値を、控え杭自身の全長・傾斜角から式(`PileGeometry.HeadElevation(a.TipElevM, L, θ)`)で逆算する方式から、**前壁の杭上端標高をそのまま使う**方式(`front.TipPoint.Z + front.LengthM`、単純な数値計算)に変更した。従来は控え杭の全長・傾斜角が前壁と異なる場合、既定値が前壁の実際の杭上端標高からずれていた(控え杭は前壁と異なる全長で計画されることが多く、両者の頭は同じ施工基面に揃える想定のため、既定値は前壁自身の値をそのまま使うのが妥当)。
+- Z_head 入力後の内部 Z_tip への変換(`Z_head − L·cosθ`)は控え杭自身の全長・傾斜角のままで変更していない(控え杭は前壁と異なり傾斜角プロンプトを維持しているため)。
+- Core 層の変更は無い(テストは 669 ケースのまま)。
+
+**`SPQW_FRONTWALL_Create` / `_Action` の傾斜角プロンプトを廃止(直杭のみ)**(`FrontWallCommands.cs` のみ)
+
+- 傾斜角 θ のプロンプトを廃止し、常に `0.0`(直杭)を書き込むようにした。`FrontWallRecord.InclDeg` フィールド自体は残しているが、`_Action` で既存の傾斜杭図面を再生成すると直杭(θ=0)に変わる点に注意。
+- 傾斜角が常に 0 になったことに伴い、杭上端標高 Z_head → 杭先端標高 Z_tip の変換を `Z_head − L·cosθ`(三角関数)から `Z_head − L`(単純な数値計算)に簡略化した。
+- `SPQW_FRONTWALL_ImportCsv`(帳票 CSV 取り込み)は変更していない。`incl_deg` 列を指定すれば引き続き傾斜杭を取り込める(対話コマンドと CSV 取り込みで挙動が食い違う状態)。
+- 施設全長を外径 D より先に入力する順序は既に対応済み(2026-07-29 の前回変更のまま、変更なし)。
+- Core 層の変更は無い(テストは 669 ケースのまま)。
 
 **既定値の変更とタイロッド組数の自動算定、取付点反力プロンプトの廃止**(`FrontWallCommands.cs` / `TieRodCommands.cs`、新規 Core `TieRodPitch.CountFor`)
 

@@ -310,10 +310,12 @@ namespace SheetPileQuayWall.Plugin.Commands
             // Create() で選択したタイロッドの TieElevation から自動設定済み(a.TieElevM)、
             // Action() では前回保存値をそのまま使う。
 
-            // 杭先端標高 Z_tip ではなく杭上端(杭頭)標高 Z_head を入力させ、全長 L・
-            // 傾斜角 θ から内部で Z_tip へ変換する(前壁と同じ方式。2026-07-29)。
-            double headElevDefault_m = SheetPileQuayWall.Core.PileGeometry.HeadElevation(
-                a.TipElevM, length_m, inclDeg);
+            // 杭先端標高 Z_tip ではなく杭上端(杭頭)標高 Z_head を数値入力させる。
+            // 既定値は控え杭自身の全長・傾斜角から式で逆算するのではなく、前壁の
+            // 杭上端標高をそのまま使う(前壁 InclDeg=0 のため Z_tip + L の単純計算。
+            // 2026-07-29、控え杭は前壁と同じ施工基面から打設される想定のため)。
+            // 入力後の Z_head → Z_tip 変換は控え杭自身の全長・傾斜角を使う(従来どおり)。
+            double headElevDefault_m = front.TipPoint.Z + front.LengthM;
 
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
                 ed, $"\n杭上端標高 Z_head (m, D.L. 基準) <{headElevDefault_m:F3}>: ",

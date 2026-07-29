@@ -568,16 +568,7 @@ namespace SheetPileQuayWall.Plugin.Commands
                 return false;
             }
 
-            double inclDeg;
-            if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
-                ed, $"\n傾斜角 θ (度, Y軸周り, 0=直杭) <{record.InclDeg:F1}>: ",
-                record.InclDeg,
-                SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.Incl_Min_Deg,
-                SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.Incl_Max_Deg,
-                out inclDeg))
-            {
-                return false;
-            }
+            // 傾斜角 θ のプロンプトは廃止し、直杭(θ=0)のみとした(2026-07-29)。
 
             if (!SheetPileQuayWall.Plugin.Prompt.Report(ed,
                 SheetPileQuayWall.Core.FrontWall.InputValidator.ValidateD(outerD_m)))
@@ -600,7 +591,7 @@ namespace SheetPileQuayWall.Plugin.Commands
             record.LengthM = length_m;
             record.JointCode = jointCode;
             record.Grade = grade;
-            record.InclDeg = inclDeg;
+            record.InclDeg = 0.0;
             return true;
         }
 
@@ -617,11 +608,11 @@ namespace SheetPileQuayWall.Plugin.Commands
                 return false;
             }
 
-            // 杭先端標高 Z_tip ではなく杭上端(杭頭)標高 Z_head を入力させ、全長 L・
-            // 傾斜角 θ から内部で Z_tip へ変換する。内部表現(XData・タイロッド/
-            // 控え杭の整列計算)は従来どおり Z_tip 基準のまま変えない。
-            double headElevDefault_m = SheetPileQuayWall.Core.PileGeometry.HeadElevation(
-                record.TipPoint.Z, record.LengthM, record.InclDeg);
+            // 杭先端標高 Z_tip ではなく杭上端(杭頭)標高 Z_head を入力させ、内部で
+            // Z_tip へ変換する。内部表現(XData・タイロッド/控え杭の整列計算)は
+            // 従来どおり Z_tip 基準のまま変えない。傾斜角は θ=0 固定のため
+            // Z_head = Z_tip + L の単純な数値計算になる(三角関数を使わない)。
+            double headElevDefault_m = record.TipPoint.Z + record.LengthM;
 
             double headElev_m;
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
@@ -635,8 +626,7 @@ namespace SheetPileQuayWall.Plugin.Commands
                 return false;
             }
 
-            double tipElev_m = headElev_m - record.LengthM *
-                System.Math.Cos(record.InclDeg * System.Math.PI / 180.0);
+            double tipElev_m = headElev_m - record.LengthM;
 
             if (!SheetPileQuayWall.Plugin.Prompt.Report(ed,
                 SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.ValidateTipElevation(
