@@ -54,6 +54,14 @@
       <Private>False</Private>
       <SpecificVersion>False</SpecificVersion>
     </Reference>
+    <!-- SpqwGeometryNodes(Dynamoネイティブ ProtoGeometry によるソリッド生成、2026-07-29 追加)用。
+         AutoCAD 本体 DLL への参照ではないため deps.json 問題は再発しない想定だが、
+         実機での Import Library 成功は未検証(README §10 参照)。 -->
+    <Reference Include="ProtoGeometry">
+      <HintPath>$(DynamoRoot)\ProtoGeometry.dll</HintPath>
+      <Private>False</Private>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>

@@ -45,6 +45,87 @@ namespace Autodesk.DesignScript.Runtime
     }
 }
 
+// Dynamo ネイティブジオメトリ用。実体は ProtoGeometry.dll(Dynamo 3.3)にある。
+// SpqwGeometryNodes(2026-07-29 追加)の構文検証専用スタブ。実 API のシグネチャとの
+// 一致は目視でしか保証できない(§9.3 未検証)。ここに定義したメンバは
+// SpqwGeometryNodes が実際に使用するものだけに限定している。
+namespace Autodesk.DesignScript.Geometry
+{
+    public class Geometry : System.IDisposable
+    {
+        public Geometry Translate(double x, double y, double z)
+        {
+            throw new System.NotSupportedException("Dynamo ジオメトリスタブです。");
+        }
+
+        public Geometry Rotate(Point origin, Vector axis, double degrees)
+        {
+            throw new System.NotSupportedException("Dynamo ジオメトリスタブです。");
+        }
+
+        public void Dispose() { }
+    }
+
+    public sealed class Point : Geometry
+    {
+        public double X { get { throw new System.NotSupportedException("Dynamo ジオメトリスタブです。"); } }
+        public double Y { get { throw new System.NotSupportedException("Dynamo ジオメトリスタブです。"); } }
+        public double Z { get { throw new System.NotSupportedException("Dynamo ジオメトリスタブです。"); } }
+
+        public static Point ByCoordinates(double x, double y, double z)
+        {
+            throw new System.NotSupportedException("Dynamo ジオメトリスタブです。");
+        }
+
+        public static Point Origin()
+        {
+            throw new System.NotSupportedException("Dynamo ジオメトリスタブです。");
+        }
+    }
+
+    public sealed class Vector : Geometry
+    {
+        public static Vector ZAxis()
+        {
+            throw new System.NotSupportedException("Dynamo ジオメトリスタブです。");
+        }
+
+        public static Vector YAxis()
+        {
+            throw new System.NotSupportedException("Dynamo ジオメトリスタブです。");
+        }
+    }
+
+    public abstract class Curve : Geometry
+    {
+        public Solid ExtrudeAsSolid(double distance)
+        {
+            throw new System.NotSupportedException("Dynamo ジオメトリスタブです。");
+        }
+    }
+
+    public sealed class Circle : Curve
+    {
+        public static Circle ByCenterPointRadiusNormal(Point centerPoint, double radius, Vector normal)
+        {
+            throw new System.NotSupportedException("Dynamo ジオメトリスタブです。");
+        }
+    }
+
+    public sealed class Solid : Geometry
+    {
+        public Solid Difference(Solid other)
+        {
+            throw new System.NotSupportedException("Dynamo ジオメトリスタブです。");
+        }
+
+        public Solid Union(Solid other)
+        {
+            throw new System.NotSupportedException("Dynamo ジオメトリスタブです。");
+        }
+    }
+}
+
 namespace Autodesk.AutoCAD.Geometry
 {
     public struct Point2d
