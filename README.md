@@ -635,7 +635,7 @@ Dynamo 自身のジオメトリカーネル(`Autodesk.DesignScript.Geometry` / `
 |---|---|---|---|
 | `CreateAnchorPileSolid` | 控え杭(本管 + 閉端時は底板、傾斜角対応) | `headPoint`, `D_mm`, `t_mm`, `L_m`, `inclDeg`, `closedTip` | 800.0 / 12.0 / 20.0 / 0.0 / false |
 | `CreateFrontWallPileSolid` | 前壁本体円筒(θ=0 固定、継手なし) | `headPoint`, `D_mm`, `t_mm`, `L_m` | 800.0 / 12.0 / 20.0 |
-| `CreateTieRodSolid` | タイロッド(直杭、法線直角方向の軸線に沿った円柱を組数ぶん) | `baseX_m`, `positionY_m`, `rodDiameter_m`, `spanLength_m`, `pileDiameter_m`, `pilePitch_m`, `tieSpacing_m`, `tieCount`, `hwl_m`, `tieElevation_m` | 0.0 / 0.0 / 0.048 / 10.000 / 1.000 / 1.200 / 2.400 / 1 / 2.000 / 2.500 |
+| `CreateTieRodSolid` | タイロッド(直杭、法線直角方向の軸線に沿った円柱を組数ぶん) | `baseX_m`, `positionY_m`, `rodDiameter_m`, `spanLength_m`, `pileDiameter_m`, `pilePitch_m`, `tieSpacing_m`, `tieCount`, `hwl_m`, `tieElevation_m` | 0.0 / 0.0 / 0.048 / 10.000 / 1.000 / 1.200 / 2.400 / 1 / 1.000 / 1.500 |
 
 控え杭・前壁の杭先端への変換は `PileGeometry.TipFromHead`(Core、既存・テスト済み)をそのまま再利用し、配置順序(回転 → 平行移動)は AutoCAD コマンド版の `BuildSolid` と一致させている。タイロッドの派生量(全長・海側/陸側端 X・各組 Y 座標)は `TieRodCalculator.Compute`(Core、既存・テスト済み)をそのまま呼び出し、整合性チェック(取付間隔が矢板ピッチの整数倍であること等)も同じ `TieRodParameters.Validate()` が実行する。
 
@@ -766,7 +766,7 @@ Dynamo 自身のジオメトリカーネル(`Autodesk.DesignScript.Geometry` / `
 | `everyNPiles` | タイロッド取付間隔(矢板何本ごと) | 本 | 1 | 1〜50、かつ間隔が 0.600〜20.000 m |
 | `tieSpacing` | タイロッド取付間隔 | m | **`pilePitch × everyNPiles` で自動算出** | 派生量(ピッチの整数倍が構造的に保証される) |
 | `tieCount` | 組数 | 組 | **前壁の総本数と `everyNPiles` から自動算定(入力を求めない)** | `TieRodPitch.CountFor(pieceCount, everyNPiles)` = `(pieceCount-1)/everyNPiles + 1`(1 本目に配置し以降 n 本ごと) |
-| `hwl` | H.W.L. 標高 | m(D.L.) | 2.000 | 0.000〜5.000 |
+| `hwl` | H.W.L. 標高 | m(D.L.) | 1.000 | 0.000〜5.000 |
 | `tieElevation` | タイロッド軸心標高 | m(D.L.) | `hwl` + 0.500 | −5.000〜10.000 |
 | `layerColor` | 色 | ACI | 8 | 1〜255 |
 | `positionY` | 1 組目の位置 Y | m | − | UCS ピック(**X は前壁から自動計算**。`_Action` では保存値を保持) |

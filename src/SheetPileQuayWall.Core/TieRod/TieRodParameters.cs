@@ -42,10 +42,10 @@ namespace SheetPileQuayWall.Core.TieRod
         public int TieCount { get; set; } = 1;
 
         /// <summary>朔望平均満潮面 H.W.L. の標高 (m, D.L. 基準)。現場ごとに設定する。</summary>
-        public double Hwl { get; set; } = 2.000;
+        public double Hwl { get; set; } = 1.000;
 
         /// <summary>タイロッド軸心の標高 (m, D.L. 基準)。既定値は H.W.L. + 0.5 m。</summary>
-        public double TieElevation { get; set; } = 2.500;
+        public double TieElevation { get; set; } = 1.500;
 
         /// <summary>腹起し溝形鋼の高さ h (m)。鋼管矢板を半割にして設置するため 0 は許容しない。</summary>
         public double WalingHeight { get; set; } = 0.300;

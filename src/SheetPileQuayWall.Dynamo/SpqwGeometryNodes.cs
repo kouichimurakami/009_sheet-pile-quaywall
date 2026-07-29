@@ -227,8 +227,8 @@ namespace SheetPileQuayWall.Dynamo
             double pilePitch_m = 1.200,
             double tieSpacing_m = 2.400,
             int tieCount = 1,
-            double hwl_m = 2.000,
-            double tieElevation_m = 2.500)
+            double hwl_m = 1.000,
+            double tieElevation_m = 1.500)
         {
             SheetPileQuayWall.Core.TieRod.TieRodParameters p =
                 new SheetPileQuayWall.Core.TieRod.TieRodParameters();

@@ -27,7 +27,7 @@ namespace SheetPileQuayWall.Plugin.XData
             new SheetPileQuayWall.Core.AnchorPile.AnchorInput
             {
                 OuterDm = 0.800, WallTm = 0.012, LengthM = 20.0, InclDeg = 0.0,
-                ClosedTip = false, SpanM = 10.0, TieElevM = 2.5, TipElevM = -18.0,
+                ClosedTip = false, SpanM = 10.0, TieElevM = 1.5, TipElevM = -18.0,
                 ColorIdx = 8
             };
 
