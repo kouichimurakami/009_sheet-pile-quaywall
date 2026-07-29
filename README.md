@@ -3,7 +3,7 @@
 **鋼管矢板式岸壁**(前壁鋼管矢板 + タイロッド + 控え杭)を、単一の DLL で完結してパラメトリック 3D モデル生成・積算(施工歩掛計算)できる AutoCAD 2025 / Civil 3D 2025 プラグイン。
 
 - ターゲット: C# / .NET 8.0、`net8.0-windows`、x64、AutoCAD 2025 .NET / Civil 3D 2025 / Dynamo 3.3(Zero Touch Node)
-- 構成: **Core(AutoCAD 非依存の計算層)/ Plugin(AutoCAD 依存層)** の 2 プロジェクト分割。Core は BCL のみを参照し、WSL / Linux でもテストできる(**xUnit 626 ケース green**)
+- 構成: **Core(AutoCAD 非依存の計算層)/ Plugin(AutoCAD 依存層)** の 2 プロジェクト分割。Core は BCL のみを参照し、WSL / Linux でもテストできる(**xUnit 651 ケース green**)
 - `006_steel-pipe-pile` / `007_steel-pipe-sheet-pile` / `008_tairod` の後継・統合版であり、**009 単独でビルド・実行できる**(3 リポジトリへのプロジェクト参照・アセンブリ参照は持たない)
 
 > **使用前に §9「注意点・既知の課題」を必ず読むこと。**実機動作は未検証であり、積算基準の一部に OCR から復元できなかった表がある。
@@ -886,7 +886,7 @@ CSV の行順は問わない(標高上端の降順に自動で並べ替えたう
 | 断面積 A / 断面 2 次モーメント I / 断面係数 Z / 単位重量 W / 断面 2 次半径 i | 日本製鉄 K011 | 確定 |
 | 有効幅 B(= 矢板ピッチ) | B = D + 継手有効間隔 J(K011)。LT65/LT75 は √式、PP は J=0.2478、PT は J=0.180 | 確定 |
 | 有効幅 B(LT100) | カタログ式が無く D + 0.100 | **推定** |
-| 継手 3D モデルの幾何整合性(LT65/LT75/LT100) | `FrontWall.JointFit` で検証済み。A側(山形鋼)・B側(T形鋼受け)を有効幅 B のピッチで配置すると、D=500〜2000mm の範囲で干渉せず、最小離隔は径によらず約5.5mmで一定(`JointPlacement` の変換式が A側・B側とも半径 R を単純加算する構造のため)。**PP/PT(円形継手管の絡み合い型)は対象外**、多角形交差判定では噛み合わせを正しく評価できない | 確定(LT100 含む) |
+| 継手 3D モデルの幾何整合性(LT65/LT75/LT100) | `FrontWall.JointFit` で検証済み。A側(山形鋼)・B側(T形鋼受け)を有効幅 B のピッチで配置すると、D=500〜2000mm の範囲で干渉せず、最小離隔は径によらず約5.5mmで一定(`JointPlacement` の変換式が A側・B側とも半径 R を単純加算する構造のため)。**PP/PT(円形継手管の絡み合い型)は対象外**、多角形交差判定では噛み合わせを正しく評価できない(§9.4 の縮退辺除去とは別の話。PP/PT の A側自己交差は縮退辺除去で解消済みだが、A側⟺B側の噛み合わせ評価自体は未対応) | 確定(LT100 含む) |
 | 継手の要否・雌雄 | 施工順位から一意(`pieceIndex > 1` で −Y 側、`pieceIndex < pieceCount` で +Y 側) | 確定 |
 | 継手質量(側別) | A 側(+Y): LT = 山形鋼×2 / PP・PT = 鋼管。B 側(−Y): LT・PT = T 形鋼 / PP = 鋼管 | 確定 |
 | 杭頭標高 | Z_tip + L·cos θ | 確定 |
@@ -997,7 +997,7 @@ CSV の行順は問わない(標高上端の降順に自動で並べ替えたう
 Core 層は AutoCAD 非依存のため WSL / Linux でもビルド・テストできる。Plugin 層は AutoCAD が必要で、無い環境ではスタブで構文検証まで行う。
 
 ```bash
-# Core + テスト(AutoCAD 不要。626 件が green であること)
+# Core + テスト(AutoCAD 不要。651 件が green であること)
 dotnet test tests/SheetPileQuayWall.Core.Tests -c Release
 
 # Plugin の構文検証(AutoCAD 不要。スタブとリンクする。配布不可)
@@ -1066,7 +1066,7 @@ AutoCAD コマンド(NETLOAD)と Dynamo ノード(Import Library)は独立した
 │       │                                 打設歩掛積算 4 系統。すべて AutoCAD 非依存の純計算)
 │       └── DrawingHelper.cs / Prompt.cs / SolidBuilder.cs
 ├── stubs/                               AutoCAD API スタブ(構文検証専用。配布禁止)
-├── tests/SheetPileQuayWall.Core.Tests/  xUnit 626 ケース + fixtures/
+├── tests/SheetPileQuayWall.Core.Tests/  xUnit 651 ケース + fixtures/
 ├── scripts/
 │   ├── port-from-legacy.sh              007/008 からの冪等移植
 │   └── verify-dll-versions.ps1          参照 DLL バージョン実測(CLAUDE.PRIVATE.md §9)
@@ -1159,6 +1159,7 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 
 - **007 の継手質量にバグがある**。`JointCatalog.JointMassPerM` は P-P 形で鋼管を 1 本分(34.7 kg/m)しか数えないが、`JointShapes` の実形状は両側とも φ165.2×9 の鋼管であり、正しくは 69.4 kg/m(約 50% の過小評価)。009 では `JointMass`(側別質量)を新設して積算に使っており、移植元のファイルは変更していない(`port-from-legacy.sh` の再実行で失われるため)。**007 側の修正は別途必要。**
 - **008 の `TieRodParameters.SpanLength` の XML コメントが誤っている**。「控工中心まで」とあるが、008 の README 図・算定式・006 の定義はいずれも「前壁矢板中心〜陸側定着面」を指す。009 では正しい定義でコメント・プロンプトを記述している。
+- **007 の `JointShapes`(継手断面、DXF 抽出データ)に極端に短い辺(実測 最小 0.0023mm)が含まれる**。`SPQW_FRONTWALL_Create` を実機で実行すると `Region.CreateFromCurves` が `eInvalidInput` で失敗する形で顕在化した(2026-07-29)。抽出時の丸め誤差とみられる(本来同一点であるべき座標が僅かにずれて2点として記録されている)。`JointShapes.cs` は手編集禁止のため、`FrontWall.PolygonCleanup.RemoveDegenerateVertices` で押し出し直前に縮退辺を除去する対処とした(`SolidBuilder.JointMember`)。副次的に、PP/PT の `LoopsA` で検出されていた自己交差(§6.1 の脚注参照)も、この縮退辺による交差判定の誤検出だったことが判明し、除去後は解消した。**007 側の DXF 再抽出は別途検討が必要。**
 
 ### 9.5 実機動作確認
 
@@ -1169,6 +1170,14 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 ## 10. 旧版 README からの変更点
 
 それ以前の機能追加履歴(帳票 CSV 取り込み・付帯船舶・控え杭打設歩掛・柱状図解析ノード・Dynamo 節全面改訂の経緯)は git log と [`docs/implementation-plan.md`](docs/implementation-plan.md) の変更履歴を参照。
+
+**実機バグ修正: `SPQW_FRONTWALL_Create` が継手断面の生成で `eInvalidInput` クラッシュする不具合**(新規 Core `FrontWall.PolygonCleanup`)
+
+- 2026-07-29、実機(AutoCAD 2025)で `SPQW_FRONTWALL_Create` を実行すると、既定の継手形式 LT75 で `Region.CreateFromCurves` が `eInvalidInput` を返しクラッシュすることが判明。原因は `JointShapes`(007 の DXF 抽出データ)に含まれる極端に短い辺(LT65/75/100 共通の `LoopsB` で実測 最小 0.0023mm)で、AutoCAD がこれを無効な形状として拒否していた。
+- `JointShapes.cs` は手編集禁止(決定3、再生成で失われる)のため、押し出しソリッド生成の直前(`SolidBuilder.JointMember`)で縮退辺を除去する前処理 `PolygonCleanup.RemoveDegenerateVertices` を追加した。閾値 0.01mm は、実測した縮退辺(最大0.0023mm)と意匠上の最小辺(LT65/75/100 の `LoopsB` で0.177mm)の中間に設定。
+- **副産物**: 前回(2026-07-29 の別セッション)「PP/PT の `LoopsA` は自己交差しており多角形交差判定の対象外」と判断していたが、この自己交差は縮退辺(ゼロ長辺)による誤検出であり、縮退辺除去後は解消することを確認した(`JointFit` を PP/PT の噛み合わせ評価に使えない、という判断自体は変わらない。噛み合わせ構造そのものが LT型と異なるため)。
+- `PolygonCleanupTests`(T1287〜T1292)で、全 `JointType` の実データに対しクリーニング後に縮退辺・自己交差が残らないことを回帰テストとして固定した。
+- テスト 640 → **651 ケース**。
 
 **継手 3D モデルとカタログ有効幅の幾何整合性を検証**(新規 Core `FrontWall.JointFit`。コード変更ではなく検証)
 
