@@ -198,6 +198,7 @@ Civil 3D 2025 同梱の Dynamo 3.3 で使う Zero Touch Node。全 **7 ノード
 ### 4.1 共通仕様
 
 - **カテゴリ**: ノード検索で `SpqwNodes.` と入力すると `SheetPileQuayWall.Plugin > Dynamo` 配下に 7 ノードが表示される。
+- **ライブラリ走査からの除外**: Dynamo の Import Library はアセンブリ内の public 型を既定ですべて走査してノード候補にする。`SpqwNodes` 以外の Plugin クラス(`FrontWallCommands` 等の各コマンド、`DrawingHelper` / `Prompt` / `SolidBuilder` / `XDataStore` / 3 部材の XData レコード)は AutoCAD 専用の型・`out` 引数を使うため走査対象から外す必要があり、`[Autodesk.DesignScript.Runtime.IsVisibleInDynamoLibrary(false)]` を各クラスへ付与している(§10 参照。付与前は Dynamo 側の Import Library がライブラリ全体を `LibraryLoadFailedException` で拒否していた)。
 - **入力**: メソッドの各引数がそのまま入力ポートになる。`Number` / `String` / `Boolean` / `Code Block` ノードから配線する。**未配線のポートはデフォルト値で実行される**ため、既定値のまま出力を確かめてから実データに置き換えられる(例外: `CalcWeightedN` はファイルパス必須のため既定値では例外)。
 - **出力**: 戻り値は `[MultiReturn]` の辞書で、**日本語の辞書キーがそのまま出力ポート名**になる(CLAUDE.PRIVATE.md §2.1)。必要な項目だけを下流(`Watch` / `Data.ExportToCSV` / `Excel.WriteToFile` 等)へ配線すればよい。
 - **list-level 自動反復**: 入力に単一値の代わりにリストを渡すと、Dynamo が 1 要素ずつ自動で関数を呼び出し、結果をリストで返す(§4.9 の例 1)。
@@ -1200,6 +1201,13 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 ## 10. 旧版 README からの変更点
 
 それ以前の機能追加履歴(帳票 CSV 取り込み・付帯船舶・控え杭打設歩掛・柱状図解析ノード・Dynamo 節全面改訂の経緯)は git log と [`docs/implementation-plan.md`](docs/implementation-plan.md) の変更履歴を参照。
+
+**実機バグ修正: Dynamo の Import Library が `LibraryLoadFailedException` で失敗する不具合**(15 クラスに `IsVisibleInDynamoLibrary(false)` を追加)
+
+- 実機(Civil 3D 2025 / Dynamo 3.3)で Dynamo の「Import Library」から `SheetPileQuayWall.Plugin.dll` を読み込むと、`Dynamo.Exceptions.LibraryLoadFailedException` でライブラリ全体の読み込みが失敗することが判明した。同じ DLL を AutoCAD の `NETLOAD` で読み込む分には成功するため、AutoCAD コマンド自体・参照 DLL の問題ではなく Dynamo 固有の読み込み処理に原因があると判断した。
+- 原因は、Dynamo の Import Library がアセンブリ内の public 型を既定で**すべて**走査してノード候補にする点。`SpqwNodes`(Dynamo 公開を意図した 7 ノード)以外にも、`FrontWallCommands` 等の各コマンドクラス、`DrawingHelper` / `Prompt` / `SolidBuilder` / `XDataStore`、3 部材の XData レコードクラスが軒並み public であり、これらは `Editor` / `Transaction` / `out` 引数付きメソッドなど Dynamo が扱えない AutoCAD 専用の型を含むため、走査時に例外が起きてライブラリ全体の読み込みが止まっていたと考えられる。これを走査対象から除外する属性がコード上どこにも付与されていなかった。
+- `SpqwNodes` を除く 15 クラス(コマンド 12 クラス + XData レコード 3 クラス)に `[Autodesk.DesignScript.Runtime.IsVisibleInDynamoLibrary(false)]` を付与した。WSL でのスタブ構文検証用に `stubs/AutoCadStubs.cs` へ同属性のスタブを追加した。
+- Core 層の変更は無い(テストは 671 ケースのまま)。
 
 **前壁鋼管矢板の内部構造を杭先端標高 Z_tip 基準から杭上端(杭頭)標高 Z_head 基準へ作り替え**(Core `FrontWallRef`/`FrontWallPlacement`/`PileGeometry`、Plugin `FrontWallRecord`(XData)/`FrontWallCommands`/`DrawingHelper`/`ImportCommands`/`AnchorPileCommands`)
 

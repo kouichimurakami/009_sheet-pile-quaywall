@@ -12,6 +12,7 @@
 
 namespace SheetPileQuayWall.Plugin
 {
+    [Autodesk.DesignScript.Runtime.IsVisibleInDynamoLibrary(false)]
     public static class SolidBuilder
     {
         // 中空円筒(Z=0 〜 Z=+height_m)。Circle → Region → BoolSubtract → Extrude

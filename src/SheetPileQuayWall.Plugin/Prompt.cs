@@ -8,6 +8,7 @@
 
 namespace SheetPileQuayWall.Plugin
 {
+    [Autodesk.DesignScript.Runtime.IsVisibleInDynamoLibrary(false)]
     public static class Prompt
     {
         // AutoCAD 2025 SDK では PromptOptions 系の AllowNone が、型によって

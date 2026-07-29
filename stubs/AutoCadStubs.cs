@@ -31,6 +31,18 @@ namespace Autodesk.DesignScript.Runtime
         public MultiReturnAttribute(string[] keys) { Keys = keys; }
         public string[] Keys { get; }
     }
+
+    // Dynamo の Import Library はアセンブリ内の public 型を既定ですべて走査する。
+    // SpqwNodes 以外の Plugin クラス(AutoCAD 専用の型・out 引数を使う)を
+    // 走査対象から除外するために各クラスへ付与する(2026-07-29 実機で判明)。
+    [System.AttributeUsage(
+        System.AttributeTargets.Class | System.AttributeTargets.Method
+        | System.AttributeTargets.Property)]
+    public sealed class IsVisibleInDynamoLibraryAttribute : System.Attribute
+    {
+        public IsVisibleInDynamoLibraryAttribute(bool visible) { Visible = visible; }
+        public bool Visible { get; }
+    }
 }
 
 namespace Autodesk.AutoCAD.Geometry

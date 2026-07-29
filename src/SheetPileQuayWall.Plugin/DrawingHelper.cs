@@ -5,6 +5,7 @@
 
 namespace SheetPileQuayWall.Plugin
 {
+    [Autodesk.DesignScript.Runtime.IsVisibleInDynamoLibrary(false)]
     public static class DrawingHelper
     {
         // 同名レイヤーが無ければ作成する(CLAUDE.PRIVATE.md §2.3: 日本語レイヤー名)。

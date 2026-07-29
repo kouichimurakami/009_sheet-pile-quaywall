@@ -13,6 +13,7 @@
 
 namespace SheetPileQuayWall.Plugin.Commands
 {
+    [Autodesk.DesignScript.Runtime.IsVisibleInDynamoLibrary(false)]
     public static class AnchorPileCommands
     {
         public const string LayerName = "控え杭";

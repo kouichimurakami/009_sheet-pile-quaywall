@@ -16,6 +16,7 @@
 
 namespace SheetPileQuayWall.Plugin.Commands
 {
+    [Autodesk.DesignScript.Runtime.IsVisibleInDynamoLibrary(false)]
     public static class FrontWallCommands
     {
         public const string LayerName = "前壁鋼管矢板";

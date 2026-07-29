@@ -15,6 +15,7 @@
 
 namespace SheetPileQuayWall.Plugin.XData
 {
+    [Autodesk.DesignScript.Runtime.IsVisibleInDynamoLibrary(false)]
     public sealed class TieRodRecord
     {
         public const string RegAppName = "SPQW_TIEROD";
