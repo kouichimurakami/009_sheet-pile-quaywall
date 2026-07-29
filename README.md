@@ -1013,9 +1013,19 @@ dotnet build src/SheetPileQuayWall.Plugin/SheetPileQuayWall.Plugin.csproj -c Rel
 
 AutoCAD が既定パス以外にある場合は `-p:AcadRoot="..."` を指定する。
 
-### Visual Studio で NU1105(プロジェクト情報が見つかりません)が出た場合
+### プロジェクトの置き場所を固定する(推奨。フォルダ乱立の根本対策)
 
-GitHub の ZIP をダウンロードして新しいフォルダに展開するたびに、`obj` / `.vs` フォルダへ前のフォルダ名を含む古いキャッシュが残り、NuGet の依存関係解決が壊れることがある。[`scripts/fix-restore.bat`](scripts/fix-restore.bat) をダブルクリックすると、`.vs` / `obj` / `bin` の削除と `dotnet restore` を自動実行する。実行後は Visual Studio を再起動し、`SheetPileQuayWall.Plugin.csproj` を開き直すこと。
+社内ルールで `git clone` / `git pull` が使えず GitHub の ZIP を都度ダウンロードする運用のため、そのままだと展開のたびに「新しいフォルダー (N)」が増え続け、後述の NU1105 / CS0006 が繰り返し発生する。
+
+[`scripts/update-project.bat`](scripts/update-project.bat) を**プロジェクトフォルダの外**(デスクトップなど)へ 1 回だけコピーしておくと、以後は新しい ZIP をこのファイルへ**ドラッグ&ドロップするだけ**で、同じ固定フォルダ(`update-project.bat` と同じ場所の `009_sheet-pile-quaywall`)への上書き展開・キャッシュ削除・`dotnet restore`・`dotnet build` までを自動実行する。フォルダが増えないため NU1105 自体が起きなくなる。
+
+> プロジェクトフォルダの**中**に置くと、更新のたびに自分自身が上書き対象に巻き込まれるため、必ず外に置くこと。
+
+### Visual Studio で NU1105(プロジェクト情報が見つかりません)/ CS0006(メタデータファイルが見つかりません)が出た場合
+
+`update-project.bat` を使わず手動で ZIP を展開している場合、`obj` / `.vs` フォルダへ前のフォルダ名を含む古いキャッシュが残り、NuGet の依存関係解決やプロジェクト間のビルド成果物の参照が壊れることがある。[`scripts/fix-restore.bat`](scripts/fix-restore.bat) をダブルクリックすると、`.vs` / `obj` / `bin` の削除、`dotnet restore`、`dotnet build`(Core → Plugin の順)までを自動実行する。実行後は Visual Studio を再起動し、`SheetPileQuayWall.Plugin.csproj` を開き直すこと。
+
+> `-p:Platform=x64` を手動ビルドコマンドに付けないこと。`Core.csproj` には `<Platforms>` の指定が無く、`Platform` を強制すると出力先が `bin\x64\...` という Visual Studio が期待しない場所になり、CS0006 の原因になる(2026-07-29 実機で確認)。
 
 ### AutoCAD / Civil 3D への登録(NETLOAD)
 
@@ -1174,6 +1184,12 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 ## 10. 旧版 README からの変更点
 
 それ以前の機能追加履歴(帳票 CSV 取り込み・付帯船舶・控え杭打設歩掛・柱状図解析ノード・Dynamo 節全面改訂の経緯)は git log と [`docs/implementation-plan.md`](docs/implementation-plan.md) の変更履歴を参照。
+
+**開発環境トラブルの再発防止**(`scripts/update-project.bat` 新設 + `fix-restore.bat` 強化。コード変更なし)
+
+- `git clone`/`pull` が使えない実機環境で ZIP を都度ダウンロードする運用のため、展開のたびに新しいフォルダが増え、NU1105(プロジェクト情報が見つかりません)が繰り返し発生していた。`update-project.bat` を新設し、ZIP をドラッグ&ドロップするだけで固定フォルダへの上書き展開・キャッシュ削除・ビルドまで自動化することで、フォルダ増殖自体を止める根本対策とした。
+- `fix-restore.bat` は `dotnet restore` のみで Core の実ビルドを行っていなかったため CS0006(メタデータファイルが見つかりません)が繰り返し発生していた。`dotnet build` のステップを追加した。あわせて `-p:Platform=x64` を手動ビルドコマンドに含めると `Core.csproj`(`<Platforms>` 未指定)の出力先が Visual Studio の期待しない場所になり CS0006 を悪化させることが実機で判明したため、READMEにも明記した。
+- 前壁の継手にのみ存在した `Region.CreateFromCurves` のクラッシュ要因(§9.4)について、タイロッド・控え杭の3Dソリッド生成コードを点検した。タイロッドは `CreateFrustum` 直接生成、控え杭は単純な円・円板からの生成のみで、どちらも DXF 由来の頂点列(`JointShapes`)を扱わないため同種の問題は無いことを確認した。
 
 **実機バグ修正: `SPQW_FRONTWALL_Create` が継手断面の生成で `eInvalidInput` クラッシュする不具合**(新規 Core `FrontWall.PolygonCleanup`)
 
