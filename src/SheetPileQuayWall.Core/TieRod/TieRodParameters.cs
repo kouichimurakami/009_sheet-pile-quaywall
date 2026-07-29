@@ -66,7 +66,7 @@ namespace SheetPileQuayWall.Core.TieRod
         public double AnchorReaction { get; set; } = 0.0;
 
         /// <summary>ソリッドの色番号 (AutoCAD Color Index)。</summary>
-        public int LayerColor { get; set; } = 30;
+        public int LayerColor { get; set; } = 8;
 
         /// <summary>英語パラメータ名と日本語説明の対応 (CLAUDE.PRIVATE.md §2.1)。</summary>
         public static readonly System.Collections.Generic.IReadOnlyDictionary<string, string> DisplayNames =
