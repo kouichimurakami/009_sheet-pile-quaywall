@@ -1,30 +1,30 @@
 @echo off
-rem NU1105 (ãƒ—ãƒ­ã‚¸ã‚§ã‚¯ãƒˆæƒ…å ±ãŒè¦‹ã¤ã‹ã‚Šã¾ã›ã‚“) ãŒ Visual Studio ã«å‡ºãŸã¨ãã®å¾©æ—§ã‚¹ã‚¯ãƒªãƒ—ãƒˆã€‚
+rem NU1105 (ƒvƒƒWƒFƒNƒgî•ñ‚ªŒ©‚Â‚©‚è‚Ü‚¹‚ñ) ‚ª Visual Studio ‚Éo‚½‚Æ‚«‚Ì•œ‹ŒƒXƒNƒŠƒvƒgB
 rem
-rem åŽŸå› : GitHub ã® ZIP ã‚’ãƒ€ã‚¦ãƒ³ãƒ­ãƒ¼ãƒ‰ã—ã¦æ–°ã—ã„ãƒ•ã‚©ãƒ«ãƒ€ã«å±•é–‹ã™ã‚‹ãŸã³ã«ã€
-rem obj / .vs ãƒ•ã‚©ãƒ«ãƒ€ã«å‰ã®ãƒ•ã‚©ãƒ«ãƒ€åã‚’å«ã‚€å¤ã„ã‚­ãƒ£ãƒƒã‚·ãƒ¥ãŒæ®‹ã‚Šã€
-rem NuGet ã®ä¾å­˜é–¢ä¿‚è§£æ±ºãŒå£Šã‚Œã‚‹ã“ã¨ãŒã‚ã‚‹ã€‚
+rem Œ´ˆö: GitHub ‚Ì ZIP ‚ðƒ_ƒEƒ“ƒ[ƒh‚µ‚ÄV‚µ‚¢ƒtƒHƒ‹ƒ_‚É“WŠJ‚·‚é‚½‚Ñ‚ÉA
+rem obj / .vs ƒtƒHƒ‹ƒ_‚É‘O‚ÌƒtƒHƒ‹ƒ_–¼‚ðŠÜ‚ÞŒÃ‚¢ƒLƒƒƒbƒVƒ…‚ªŽc‚èA
+rem NuGet ‚ÌˆË‘¶ŠÖŒW‰ðŒˆ‚ª‰ó‚ê‚é‚±‚Æ‚ª‚ ‚éB
 rem
-rem ä½¿ã„æ–¹: ã“ã®ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ãƒ€ãƒ–ãƒ«ã‚¯ãƒªãƒƒã‚¯ã™ã‚‹ã ã‘ã€‚
-rem å®Ÿè¡Œå¾Œã¯ Visual Studio ã‚’å†èµ·å‹•ã—ã€
-rem src\SheetPileQuayWall.Plugin\SheetPileQuayWall.Plugin.csproj ã‚’é–‹ãç›´ã™ã“ã¨ã€‚
+rem Žg‚¢•û: ‚±‚Ìƒtƒ@ƒCƒ‹‚ðƒ_ƒuƒ‹ƒNƒŠƒbƒN‚·‚é‚¾‚¯B
+rem ŽÀsŒã‚Í Visual Studio ‚ðÄ‹N“®‚µA
+rem src\SheetPileQuayWall.Plugin\SheetPileQuayWall.Plugin.csproj ‚ðŠJ‚«’¼‚·‚±‚ÆB
 
 setlocal
 set ROOT=%~dp0..
-echo å¯¾è±¡ãƒ•ã‚©ãƒ«ãƒ€: %ROOT%
+echo ‘ÎÛƒtƒHƒ‹ƒ_: %ROOT%
 echo.
 
-echo [1/3] .vs ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã‚’å‰Šé™¤ã—ã¦ã„ã¾ã™...
+echo [1/3] .vs ƒLƒƒƒbƒVƒ…‚ðíœ‚µ‚Ä‚¢‚Ü‚·...
 if exist "%ROOT%\.vs" rmdir /s /q "%ROOT%\.vs"
 
-echo [2/3] obj / bin ã‚­ãƒ£ãƒƒã‚·ãƒ¥ã‚’å‰Šé™¤ã—ã¦ã„ã¾ã™...
+echo [2/3] obj / bin ƒLƒƒƒbƒVƒ…‚ðíœ‚µ‚Ä‚¢‚Ü‚·...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "Get-ChildItem -Path '%ROOT%' -Recurse -Directory -Include bin,obj -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue"
 
-echo [3/3] NuGetå¾©å…ƒã‚’å®Ÿè¡Œã—ã¦ã„ã¾ã™...
+echo [3/3] NuGet•œŒ³‚ðŽÀs‚µ‚Ä‚¢‚Ü‚·...
 dotnet restore "%ROOT%\src\SheetPileQuayWall.Plugin\SheetPileQuayWall.Plugin.csproj"
 
 echo.
-echo å®Œäº†ã—ã¾ã—ãŸã€‚Visual Studio ã‚’å†èµ·å‹•ã—ã€
-echo src\SheetPileQuayWall.Plugin\SheetPileQuayWall.Plugin.csproj ã‚’é–‹ãç›´ã—ã¦ãã ã•ã„ã€‚
+echo Š®—¹‚µ‚Ü‚µ‚½BVisual Studio ‚ðÄ‹N“®‚µA
+echo src\SheetPileQuayWall.Plugin\SheetPileQuayWall.Plugin.csproj ‚ðŠJ‚«’¼‚µ‚Ä‚­‚¾‚³‚¢B
 pause
