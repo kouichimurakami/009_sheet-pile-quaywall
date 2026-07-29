@@ -1013,6 +1013,10 @@ dotnet build src/SheetPileQuayWall.Plugin/SheetPileQuayWall.Plugin.csproj -c Rel
 
 AutoCAD が既定パス以外にある場合は `-p:AcadRoot="..."` を指定する。
 
+### Visual Studio で NU1105(プロジェクト情報が見つかりません)が出た場合
+
+GitHub の ZIP をダウンロードして新しいフォルダに展開するたびに、`obj` / `.vs` フォルダへ前のフォルダ名を含む古いキャッシュが残り、NuGet の依存関係解決が壊れることがある。[`scripts/fix-restore.bat`](scripts/fix-restore.bat) をダブルクリックすると、`.vs` / `obj` / `bin` の削除と `dotnet restore` を自動実行する。実行後は Visual Studio を再起動し、`SheetPileQuayWall.Plugin.csproj` を開き直すこと。
+
 ### AutoCAD / Civil 3D への登録(NETLOAD)
 
 ビルドした Plugin DLL は自動ロード設定を持たないため、起動のたびに手動でロードする。
