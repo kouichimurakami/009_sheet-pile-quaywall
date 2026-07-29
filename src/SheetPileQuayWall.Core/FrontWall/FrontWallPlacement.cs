@@ -3,7 +3,8 @@
 //
 // docs/implementation-plan.md §2.2 の入力方式変更を反映する:
 //   平面位置 (X, Y) は UCS でクリック取得し WCS へ変換した値を受け取る。クリック点の Z は使わない
-//   標高は杭先端標高 Z_tip (D.L. 基準) を数値で受け取る
+//   標高は杭上端(杭頭)標高 Z_head (D.L. 基準) を数値で受け取る(2026-07-29、
+//   Z_tip から変更。現場で測りやすい杭頭側に揃え、内部表現も Z_head 基準にした)
 // これにより「平面位置は目視ピック、標高は正確な数値入力」という実務の作業分担に対応する。
 //
 // 幾何そのもの (回転・平行移動・杭頭標高・軸 X) は控え杭と共通のため PileGeometry に委ねる。
@@ -18,12 +19,12 @@ namespace SheetPileQuayWall.Core.FrontWall
         public const double TipElev_Min_m = -80.0;
         public const double TipElev_Max_m = 10.0;
 
-        // 平面位置 (WCS 変換済み) と杭先端標高から挿入点を組み立てる。
+        // 平面位置 (WCS 変換済み) と杭上端標高から基準点を組み立てる。
         // ピック点の Z を使わないことが §2.2 の要点であり、そのための関数である。
-        public static SheetPileQuayWall.Core.Point3 TipPoint(
-            double planX_m, double planY_m, double tipElevM)
+        public static SheetPileQuayWall.Core.Point3 HeadPoint(
+            double planX_m, double planY_m, double headElevM)
         {
-            return new SheetPileQuayWall.Core.Point3(planX_m, planY_m, tipElevM);
+            return new SheetPileQuayWall.Core.Point3(planX_m, planY_m, headElevM);
         }
 
         // 戻り値: null = 正常、非null = エラーメッセージ (InputValidator と同じ規約)

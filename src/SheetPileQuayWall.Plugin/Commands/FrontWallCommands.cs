@@ -57,7 +57,7 @@ namespace SheetPileQuayWall.Plugin.Commands
             // 2026-07-29 発見)。
             record.EffectiveWidthM = effectiveWidth_m;
 
-            double startY = record.TipPoint.Y;
+            double startY = record.HeadPoint.Y;
 
             using (Autodesk.AutoCAD.DatabaseServices.Transaction tr =
                 db.TransactionManager.StartTransaction())
@@ -70,11 +70,11 @@ namespace SheetPileQuayWall.Plugin.Commands
                 {
                     record.PieceIndex = i;
                     record.PieceCount = pieceCount;
-                    record.TipPoint = SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.TipPoint(
-                        record.TipPoint.X,
+                    record.HeadPoint = SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.HeadPoint(
+                        record.HeadPoint.X,
                         SheetPileQuayWall.Core.FrontWall.WallLayout.PositionY(
                             startY, i, effectiveWidth_m),
-                        record.TipPoint.Z);
+                        record.HeadPoint.Z);
 
                     SheetPileQuayWall.Plugin.DrawingHelper.AppendSolid(
                         db, tr, BuildSolid(record), LayerName, record.ColorIdx,
@@ -495,16 +495,16 @@ namespace SheetPileQuayWall.Plugin.Commands
                 return false;
             }
 
-            double planX = record.TipPoint.X;
-            double planY = record.TipPoint.Y;
+            double planX = record.HeadPoint.X;
+            double planY = record.HeadPoint.Y;
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskPlanPoint(
                 ed, "\n始点 (1 本目の杭中心) を指定 (Z は使用せず、標高は入力値による): ",
                 out planX, out planY))
             {
                 return false;
             }
-            record.TipPoint = SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.TipPoint(
-                planX, planY, record.TipPoint.Z);
+            record.HeadPoint = SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.HeadPoint(
+                planX, planY, record.HeadPoint.Z);
 
             // ── 整合性チェック(不一致はエラー停止、自動補正しない)────────────
             if (!SheetPileQuayWall.Plugin.Prompt.Report(ed,
@@ -595,7 +595,7 @@ namespace SheetPileQuayWall.Plugin.Commands
             return true;
         }
 
-        // 色と杭先端標高(_Create / _Action で共通。標高は record.TipPoint へ反映する)
+        // 色と杭上端標高(_Create / _Action で共通。標高は record.HeadPoint へ反映する)
         private static bool PromptColorAndTip(
             Autodesk.AutoCAD.EditorInput.Editor ed,
             SheetPileQuayWall.Plugin.XData.FrontWallRecord record)
@@ -608,11 +608,10 @@ namespace SheetPileQuayWall.Plugin.Commands
                 return false;
             }
 
-            // 杭先端標高 Z_tip ではなく杭上端(杭頭)標高 Z_head を入力させ、内部で
-            // Z_tip へ変換する。内部表現(XData・タイロッド/控え杭の整列計算)は
-            // 従来どおり Z_tip 基準のまま変えない。傾斜角は θ=0 固定のため
-            // Z_head = Z_tip + L の単純な数値計算になる(三角関数を使わない)。
-            double headElevDefault_m = record.TipPoint.Z + record.LengthM;
+            // 杭上端(杭頭)標高 Z_head を数値入力させる。内部表現(XData・タイロッド/
+            // 控え杭の整列計算)も Z_head 基準のため、格納にあたって変換は不要
+            // (2026-07-29、内部構造を Z_head 基準へ変更)。
+            double headElevDefault_m = record.HeadPoint.Z;
 
             double headElev_m;
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
@@ -626,8 +625,9 @@ namespace SheetPileQuayWall.Plugin.Commands
                 return false;
             }
 
+            // 範囲チェックは杭先端標高(物理的な制約は杭の到達深度)に対して行う。
+            // 傾斜角は θ=0 固定のため単純な数値計算(Z_tip = Z_head − L)。
             double tipElev_m = headElev_m - record.LengthM;
-
             if (!SheetPileQuayWall.Plugin.Prompt.Report(ed,
                 SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.ValidateTipElevation(
                     tipElev_m)))
@@ -636,8 +636,8 @@ namespace SheetPileQuayWall.Plugin.Commands
             }
 
             record.ColorIdx = colorIdx;
-            record.TipPoint = SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.TipPoint(
-                record.TipPoint.X, record.TipPoint.Y, tipElev_m);
+            record.HeadPoint = SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.HeadPoint(
+                record.HeadPoint.X, record.HeadPoint.Y, headElev_m);
             return true;
         }
 
@@ -689,8 +689,8 @@ namespace SheetPileQuayWall.Plugin.Commands
                 {
                     return false;
                 }
-                record.TipPoint = SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.TipPoint(
-                    planX, planY, record.TipPoint.Z);
+                record.HeadPoint = SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.HeadPoint(
+                    planX, planY, record.HeadPoint.Z);
             }
 
             // ── 整合性チェック(不一致はエラー停止、自動補正しない)────────────
@@ -784,10 +784,13 @@ namespace SheetPileQuayWall.Plugin.Commands
                         Autodesk.AutoCAD.Geometry.Point3d.Origin));
             }
 
+            // ソリッド生成のローカル原点(Z=0)は杭先端。内部は Z_head 基準のため
+            // 挿入点はここで都度算出する(2026-07-29)。
+            SheetPileQuayWall.Core.Point3 tip = SheetPileQuayWall.Core.PileGeometry.TipFromHead(
+                record.HeadPoint, record.LengthM, record.InclDeg);
             pipe.TransformBy(
                 Autodesk.AutoCAD.Geometry.Matrix3d.Displacement(
-                    new Autodesk.AutoCAD.Geometry.Vector3d(
-                        record.TipPoint.X, record.TipPoint.Y, record.TipPoint.Z)));
+                    new Autodesk.AutoCAD.Geometry.Vector3d(tip.X, tip.Y, tip.Z)));
 
             return pipe;
         }
@@ -850,8 +853,9 @@ namespace SheetPileQuayWall.Plugin.Commands
                 SheetPileQuayWall.Core.FrontWall.PieceAssignment.Assign(
                     record.PieceIndex, record.PieceCount);
 
-            double headElev = SheetPileQuayWall.Core.PileGeometry.HeadElevation(
-                record.TipPoint.Z, record.LengthM, record.InclDeg);
+            // 内部表現は Z_head 基準のため、杭先端標高は都度算出する(2026-07-29)。
+            double tipElev = SheetPileQuayWall.Core.PileGeometry.TipFromHead(
+                record.HeadPoint, record.LengthM, record.InclDeg).Z;
 
             ed.WriteMessage("\n=== 前壁鋼管矢板 断面性能 (JIS A 5530 / 日本製鉄 K011) ===");
             ed.WriteMessage($"\n  外径 D          : {D * 1000,10:F1} mm");
@@ -869,9 +873,9 @@ namespace SheetPileQuayWall.Plugin.Commands
                       (joints.HasLeadingJoint && joints.HasTrailingJoint ? " / " : "") +
                       (joints.HasTrailingJoint ? "+Y側あり" : "")
                     : "なし(単独)"));
-            ed.WriteMessage($"\n  杭先端標高      : {record.TipPoint.Z,10:F3} m (D.L.)");
-            ed.WriteMessage($"\n  杭頭標高        : {headElev,10:F3} m (D.L.)");
-            ed.WriteMessage($"\n  平面位置 (X, Y) : {record.TipPoint.X,10:F3}, {record.TipPoint.Y:F3} m");
+            ed.WriteMessage($"\n  杭先端標高      : {tipElev,10:F3} m (D.L.)");
+            ed.WriteMessage($"\n  杭頭標高        : {record.HeadPoint.Z,10:F3} m (D.L.)");
+            ed.WriteMessage($"\n  平面位置 (X, Y) : {record.HeadPoint.X,10:F3}, {record.HeadPoint.Y:F3} m");
             ed.WriteMessage($"\n  断面積 A        : {SheetPileQuayWall.Core.FrontWall.SectionProperties.CalcA(D, t),10:F2} cm2");
             ed.WriteMessage($"\n  単位重量 W      : {SheetPileQuayWall.Core.FrontWall.SectionProperties.CalcW(D, t),10:F2} kg/m");
             ed.WriteMessage($"\n  全重量          : {SheetPileQuayWall.Core.FrontWall.SectionProperties.CalcW(D, t) * record.LengthM,10:F0} kg");

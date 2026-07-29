@@ -11,15 +11,24 @@ namespace SheetPileQuayWall.Core.Tests
     public class AnchorAlignmentTests
     {
         // 標準ケース: 前壁 D=0.8m 直杭、控え杭 D=0.8m 直杭、span=10m、Z_tr=2.5m
+        // Z_tip=(tipX, 5.0, tipZ) 相当になるよう、L・θ に応じた HeadPoint を
+        // LocalToWorld(順変換)で逆算する(2026-07-29、内部表現を Z_head 基準へ変更)。
         private static SheetPileQuayWall.Core.FrontWallRef Front(
             double inclDeg = 0.0, double tipX = 0.0, double tipZ = -18.0)
         {
+            const double L = 25.0;
+            SheetPileQuayWall.Core.Point3 tip =
+                new SheetPileQuayWall.Core.Point3(tipX, 5.0, tipZ);
+            SheetPileQuayWall.Core.Point3 head =
+                SheetPileQuayWall.Core.PileGeometry.LocalToWorld(
+                    new SheetPileQuayWall.Core.Point3(0.0, 0.0, L), inclDeg, tip);
+
             return new SheetPileQuayWall.Core.FrontWallRef
             {
-                TipPoint = new SheetPileQuayWall.Core.Point3(tipX, 5.0, tipZ),
+                HeadPoint = head,
                 OuterDm = 0.800,
                 InclDeg = inclDeg,
-                LengthM = 25.0
+                LengthM = L
             };
         }
 

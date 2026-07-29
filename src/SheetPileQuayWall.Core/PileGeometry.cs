@@ -30,6 +30,17 @@ namespace SheetPileQuayWall.Core
             return tipElevM + lengthM * System.Math.Cos(inclDeg * System.Math.PI / 180.0);
         }
 
+        // 杭頭点(局所座標 Z=L)から杭先端点(局所座標 Z=0)を求める。LocalToWorld の逆演算
+        // (local=(0,0,L) の像が head であることから X・Z とも厳密に整合する)。
+        public static Point3 TipFromHead(Point3 head, double lengthM, double inclDeg)
+        {
+            double rad = inclDeg * System.Math.PI / 180.0;
+            return new Point3(
+                head.X - lengthM * System.Math.Sin(rad),
+                head.Y,
+                head.Z - lengthM * System.Math.Cos(rad));
+        }
+
         // 標高 elevM における杭軸の X 座標 [m]。LocalToWorld と厳密に整合する
         // (ローカル (0,0,s) の像は X=tip.X+s·sinθ、Z=tip.Z+s·cosθ であり、
         //  (Z−tip.Z)·tanθ = s·sinθ となるため)。

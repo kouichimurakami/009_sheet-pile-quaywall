@@ -237,9 +237,9 @@ namespace SheetPileQuayWall.Plugin
                         continue;
                     }
 
-                    if (min == null || record.TipPoint.Y < min.Value)
+                    if (min == null || record.HeadPoint.Y < min.Value)
                     {
-                        min = record.TipPoint.Y;
+                        min = record.HeadPoint.Y;
                     }
                 }
 

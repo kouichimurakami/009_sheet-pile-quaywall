@@ -57,16 +57,52 @@ namespace SheetPileQuayWall.Core.Tests
             Xunit.Assert.Equal(head.X, axisX, 9);
         }
 
-        // T963: 挿入点はピック点の Z ではなく入力した杭先端標高を使う (§2.2)
+        // T963: 基準点はピック点の Z ではなく入力した杭上端標高を使う (§2.2、
+        //       2026-07-29 に Z_tip → Z_head へ変更)
         [Xunit.Fact]
-        public void T963_TipPoint_UsesInputElevationNotPickedZ()
+        public void T963_HeadPoint_UsesInputElevationNotPickedZ()
         {
-            SheetPileQuayWall.Core.Point3 tip =
-                SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.TipPoint(
-                    12.345, -6.789, -18.0);
+            SheetPileQuayWall.Core.Point3 head =
+                SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.HeadPoint(
+                    12.345, -6.789, 2.0);
 
-            Xunit.Assert.Equal(12.345, tip.X, 9);
-            Xunit.Assert.Equal(-6.789, tip.Y, 9);
+            Xunit.Assert.Equal(12.345, head.X, 9);
+            Xunit.Assert.Equal(-6.789, head.Y, 9);
+            Xunit.Assert.Equal(2.0, head.Z, 9);
+        }
+
+        // T1302: TipFromHead は LocalToWorld(head 側)の厳密な逆演算である
+        //        (2026-07-29、前壁の内部表現を Z_head 基準へ変更するために新設)
+        [Xunit.Fact]
+        public void T1302_TipFromHead_IsExactInverseOfLocalToWorld()
+        {
+            double L = 25.0;
+            double inclDeg = 12.0;
+            SheetPileQuayWall.Core.Point3 tip =
+                new SheetPileQuayWall.Core.Point3(-3.5, 7.0, -22.0);
+            SheetPileQuayWall.Core.Point3 head =
+                SheetPileQuayWall.Core.PileGeometry.LocalToWorld(
+                    new SheetPileQuayWall.Core.Point3(0.0, 0.0, L), inclDeg, tip);
+
+            SheetPileQuayWall.Core.Point3 recoveredTip =
+                SheetPileQuayWall.Core.PileGeometry.TipFromHead(head, L, inclDeg);
+
+            Xunit.Assert.Equal(tip.X, recoveredTip.X, 9);
+            Xunit.Assert.Equal(tip.Y, recoveredTip.Y, 9);
+            Xunit.Assert.Equal(tip.Z, recoveredTip.Z, 9);
+        }
+
+        // T1303: 直杭 (θ=0) では X・Y は不変、Z のみ L だけ下がる
+        [Xunit.Fact]
+        public void T1303_TipFromHead_Vertical_ShiftsZOnlyByLength()
+        {
+            SheetPileQuayWall.Core.Point3 head =
+                new SheetPileQuayWall.Core.Point3(10.0, 20.0, 2.0);
+            SheetPileQuayWall.Core.Point3 tip =
+                SheetPileQuayWall.Core.PileGeometry.TipFromHead(head, 20.0, 0.0);
+
+            Xunit.Assert.Equal(10.0, tip.X, 9);
+            Xunit.Assert.Equal(20.0, tip.Y, 9);
             Xunit.Assert.Equal(-18.0, tip.Z, 9);
         }
 

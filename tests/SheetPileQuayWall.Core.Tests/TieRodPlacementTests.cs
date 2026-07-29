@@ -7,14 +7,23 @@ namespace SheetPileQuayWall.Core.Tests
 {
     public class TieRodPlacementTests
     {
+        // Z_tip=(0.0, 5.0, -18.0) 相当になるよう、L・θ に応じた HeadPoint を
+        // LocalToWorld(順変換)で逆算する(2026-07-29、内部表現を Z_head 基準へ変更)。
         private static SheetPileQuayWall.Core.FrontWallRef Front(double inclDeg)
         {
+            const double L = 25.0;
+            SheetPileQuayWall.Core.Point3 tip =
+                new SheetPileQuayWall.Core.Point3(0.0, 5.0, -18.0);
+            SheetPileQuayWall.Core.Point3 head =
+                SheetPileQuayWall.Core.PileGeometry.LocalToWorld(
+                    new SheetPileQuayWall.Core.Point3(0.0, 0.0, L), inclDeg, tip);
+
             return new SheetPileQuayWall.Core.FrontWallRef
             {
-                TipPoint = new SheetPileQuayWall.Core.Point3(0.0, 5.0, -18.0),
+                HeadPoint = head,
                 OuterDm = 1.000,
                 InclDeg = inclDeg,
-                LengthM = 25.0,
+                LengthM = L,
                 JointType = SheetPileQuayWall.Core.FrontWall.JointType.PP
             };
         }

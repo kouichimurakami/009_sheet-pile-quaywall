@@ -14,7 +14,7 @@ namespace SheetPileQuayWall.Core.Tests
         {
             return new SheetPileQuayWall.Core.FrontWallRef
             {
-                TipPoint = new SheetPileQuayWall.Core.Point3(0.0, 5.0, -18.0),
+                HeadPoint = new SheetPileQuayWall.Core.Point3(0.0, 5.0, 7.0),  // Z_tip=-18.0 相当 (L=25.0, θ=0)
                 OuterDm = FrontOuterD_m,
                 InclDeg = 0.0,
                 LengthM = 25.0,

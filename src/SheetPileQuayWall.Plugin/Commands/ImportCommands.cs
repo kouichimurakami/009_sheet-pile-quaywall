@@ -84,6 +84,13 @@ namespace SheetPileQuayWall.Plugin.Commands
                 {
                     SheetPileQuayWall.Core.Import.FrontWallImportRow row = ordered[i];
 
+                    // CSV の tip_z(杭先端標高)を、内部表現(Z_head 基準。2026-07-29)へ変換する
+                    SheetPileQuayWall.Core.Point3 headPoint =
+                        SheetPileQuayWall.Core.PileGeometry.LocalToWorld(
+                            new SheetPileQuayWall.Core.Point3(0.0, 0.0, row.LengthM),
+                            row.InclDeg,
+                            new SheetPileQuayWall.Core.Point3(baseX, y, row.TipZ));
+
                     SheetPileQuayWall.Plugin.XData.FrontWallRecord record =
                         new SheetPileQuayWall.Plugin.XData.FrontWallRecord
                         {
@@ -96,7 +103,7 @@ namespace SheetPileQuayWall.Plugin.Commands
                             PieceIndex = row.PieceIndex,
                             PieceCount = row.PieceCount,
                             ColorIdx = row.ColorIdx,
-                            TipPoint = new SheetPileQuayWall.Core.Point3(baseX, y, row.TipZ)
+                            HeadPoint = headPoint
                         };
 
                     Autodesk.AutoCAD.DatabaseServices.Solid3d solid =

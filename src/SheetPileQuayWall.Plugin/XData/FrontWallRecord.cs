@@ -16,9 +16,13 @@
 //   effective_width  有効幅 B [m](壁一括生成で実際に使われた値。旧図面には無く、
 //                無い場合は外径・継手形式から算出した値へフォールバックする)
 //   color        本管の色 (ACI)
-//   tip_x/_y/_z  杭先端(挿入点)の WCS 座標 [m]。_z は D.L. 基準の杭先端標高
-//   (1011)       杭先端の World 座標点。MOVE に AutoCAD が自動追随させるため、
-//                読み側はこちらを優先し、tip_x/_y/_z はフォールバック(006 の追随を維持)
+//   head_x/_y/_z 杭上端(杭頭)の WCS 座標 [m]。_z は D.L. 基準の杭上端標高
+//                (2026-07-29、tip_x/_y/_z から変更。内部表現を Z_head 基準にした)
+//   (1011)       杭上端の World 座標点。MOVE に AutoCAD が自動追随させるため、
+//                読み側はこちらを優先し、head_x/_y/_z はフォールバック(006 の追随を維持)
+//
+//   旧図面(2026-07-29 より前)は tip_x/_y/_z(杭先端)と、それを表す 1011 を持つ。
+//   head キーが無ければ旧形式とみなし、全長・傾斜角から杭上端標高へ変換して読む。
 
 namespace SheetPileQuayWall.Plugin.XData
 {
@@ -36,8 +40,8 @@ namespace SheetPileQuayWall.Plugin.XData
         public int PieceCount = 1;
         public double EffectiveWidthM = 0.0; // 0 以下は未設定(旧図面)。ToRef 側でフォールバック
         public int ColorIdx = 8;
-        public SheetPileQuayWall.Core.Point3 TipPoint =
-            new SheetPileQuayWall.Core.Point3(0.0, 0.0, -18.0);
+        public SheetPileQuayWall.Core.Point3 HeadPoint =
+            new SheetPileQuayWall.Core.Point3(0.0, 0.0, 2.0);
 
         public Autodesk.AutoCAD.DatabaseServices.ResultBuffer ToBuffer()
         {
@@ -55,8 +59,8 @@ namespace SheetPileQuayWall.Plugin.XData
             XDataStore.AddInt(values, "piece_count", PieceCount);
             XDataStore.AddReal(values, "effective_width", EffectiveWidthM);
             XDataStore.AddInt(values, "color", ColorIdx);
-            XDataStore.AddPoint(values, "tip", TipPoint);
-            XDataStore.AddWorldPoint(values, TipPoint);
+            XDataStore.AddPoint(values, "head", HeadPoint);
+            XDataStore.AddWorldPoint(values, HeadPoint);
 
             return XDataStore.ToBuffer(values);
         }
@@ -67,7 +71,13 @@ namespace SheetPileQuayWall.Plugin.XData
         {
             System.Collections.Generic.Dictionary<string, string>? map =
                 XDataStore.ReadMap(entity, RegAppName);
-            if (map == null || !XDataStore.HasPoint(map, "tip"))
+            if (map == null)
+            {
+                return null;
+            }
+
+            bool hasHead = XDataStore.HasPoint(map, "head");
+            if (!hasHead && !XDataStore.HasPoint(map, "tip"))
             {
                 return null;
             }
@@ -85,13 +95,31 @@ namespace SheetPileQuayWall.Plugin.XData
             // ToRef 側で外径・継手形式からの算出値にフォールバックする
             r.EffectiveWidthM = XDataStore.ReadReal(map, "effective_width", r.EffectiveWidthM);
             r.ColorIdx = XDataStore.ReadInt(map, "color", r.ColorIdx);
-            r.TipPoint = XDataStore.ReadPoint(map, "tip", r.TipPoint);
 
-            // MOVE 後は 1011 だけが移動先を指す。存在すれば文字列キーより優先する
-            SheetPileQuayWall.Core.Point3 worldTip;
-            if (XDataStore.TryReadWorldPoint(entity, RegAppName, out worldTip))
+            if (hasHead)
             {
-                r.TipPoint = worldTip;
+                r.HeadPoint = XDataStore.ReadPoint(map, "head", r.HeadPoint);
+            }
+            else
+            {
+                // 旧図面(tip キーのみ)。全長・傾斜角から杭上端標高へ変換する。
+                SheetPileQuayWall.Core.Point3 legacyTip =
+                    XDataStore.ReadPoint(map, "tip", r.HeadPoint);
+                r.HeadPoint = SheetPileQuayWall.Core.PileGeometry.LocalToWorld(
+                    new SheetPileQuayWall.Core.Point3(0.0, 0.0, r.LengthM),
+                    r.InclDeg, legacyTip);
+            }
+
+            // MOVE 後は 1011 だけが移動先を指す。存在すれば文字列キーより優先する。
+            // 旧図面の 1011 は杭先端を表すため、hasHead に応じて変換要否を切り替える。
+            SheetPileQuayWall.Core.Point3 worldPoint;
+            if (XDataStore.TryReadWorldPoint(entity, RegAppName, out worldPoint))
+            {
+                r.HeadPoint = hasHead
+                    ? worldPoint
+                    : SheetPileQuayWall.Core.PileGeometry.LocalToWorld(
+                        new SheetPileQuayWall.Core.Point3(0.0, 0.0, r.LengthM),
+                        r.InclDeg, worldPoint);
             }
             return r;
         }
@@ -101,7 +129,7 @@ namespace SheetPileQuayWall.Plugin.XData
         {
             return new SheetPileQuayWall.Core.FrontWallRef
             {
-                TipPoint = TipPoint,
+                HeadPoint = HeadPoint,
                 OuterDm = OuterDm,
                 InclDeg = InclDeg,
                 LengthM = LengthM,

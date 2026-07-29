@@ -3,7 +3,7 @@
 **鋼管矢板式岸壁**(前壁鋼管矢板 + タイロッド + 控え杭)を、単一の DLL で完結してパラメトリック 3D モデル生成・積算(施工歩掛計算)できる AutoCAD 2025 / Civil 3D 2025 プラグイン。
 
 - ターゲット: C# / .NET 8.0、`net8.0-windows`、x64、AutoCAD 2025 .NET / Civil 3D 2025 / Dynamo 3.3(Zero Touch Node)
-- 構成: **Core(AutoCAD 非依存の計算層)/ Plugin(AutoCAD 依存層)** の 2 プロジェクト分割。Core は BCL のみを参照し、WSL / Linux でもテストできる(**xUnit 668 ケース green**)
+- 構成: **Core(AutoCAD 非依存の計算層)/ Plugin(AutoCAD 依存層)** の 2 プロジェクト分割。Core は BCL のみを参照し、WSL / Linux でもテストできる(**xUnit 671 ケース green**)
 - `006_steel-pipe-pile` / `007_steel-pipe-sheet-pile` / `008_tairod` の後継・統合版であり、**009 単独でビルド・実行できる**(3 リポジトリへのプロジェクト参照・アセンブリ参照は持たない)
 
 > **使用前に §9「注意点・既知の課題」を必ず読むこと。**実機動作は未検証であり、積算基準の一部に OCR から復元できなかった表がある。
@@ -20,19 +20,21 @@
 ```
       海側 −X                     X = 0                               陸側 +X
                                     ┃
-   杭頭標高 ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┓┃
-                                  ┃┃      腹起し(矢板半割部)   定着プレート・ワッシャー・ナット
+   Z_head ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┓┃
+   (入力・内部表現の基準点)        ┃┃      腹起し(矢板半割部)   定着プレート・ワッシャー・ナット
    Z_tr ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┃┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫┓┄┄┄ タイロッド軸心
   (= H.W.L. + 0.5)                ┃┃                            ┃┃
    D.L.±0.000 ━━━━━━━━━━━━━━━━━━━━╋╋━━━━━━━━━━━━━━━━━━━━━━━━━━━━╋╋━━━ 基本水準面 Z = 0
                                   ┃┃                            ┃┃
                    前壁鋼管矢板 → ┃┃                            ┃┃ ← 控え杭
-                   (傾斜角 θ 可)  ┃┃                            ┃┃   (傾斜角 θ_a 可)
+                   (直杭のみ)     ┃┃                            ┃┃   (傾斜角 θ_a 可)
                                   ┗┛                            ┗┛
-   Z_tip ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ 杭先端(挿入点)
+   Z_tip ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ 杭先端(ソリッド生成用の計算値)
                                     │←────────── span ─────────→│
                                        (前壁矢板中心 〜 控え杭陸側定着面)
 ```
+
+前壁は `Z_head = Z_tip + L`(直杭のみのため三角関数を使わない単純計算)。控え杭は今も傾斜角 θ_a を持つため、内部は従来どおり杭先端標高 Z_tip 基準。
 
 ### 平面(X–Y)
 
@@ -59,7 +61,7 @@
 | Y | 施設延長方向 | 法線平行方向 |
 | Z | 鉛直上向き | **Z = 0 を D.L.(基本水準面)に統一**。3 部材共通 |
 
-標高パラメータ(杭先端標高 Z_tip・タイロッド軸心標高 Z_tr 等)はすべて D.L. 基準の数値がそのまま Z 座標になる。
+標高パラメータ(前壁の杭上端標高 Z_head、控え杭の杭先端標高 Z_tip、タイロッド軸心標高 Z_tr 等)はすべて D.L. 基準の数値がそのまま Z 座標になる。
 
 ---
 
@@ -94,7 +96,7 @@
 
 | コマンド | 説明 |
 |---|---|
-| `SPQW_FRONTWALL_Create` | 対話入力 → **施設全長と有効幅 B から本数を自動算出し、始点から +Y 方向へ壁を一括生成**(実形状継手 + 傾斜角対応)→ XData 記録 |
+| `SPQW_FRONTWALL_Create` | 対話入力 → **施設全長と有効幅 B から本数を自動算出し、始点から +Y 方向へ壁を一括生成**(実形状継手。直杭のみ)→ XData 記録 |
 | `SPQW_FRONTWALL_Action` | 既存選択 → 諸元再入力 → 同位置に再生成(**MOVE 後は移動先に追随**) |
 | `SPQW_FRONTWALL_Query` | 諸元・断面性能(K011)・継手要否・質量を出力 |
 | `SPQW_FRONTWALL_Estimate` | **打撃工法**の打設歩掛積算(4節 3-4.5。杭打機/杭打船・付帯船舶を含む) |
@@ -105,8 +107,8 @@
 
 | コマンド | 説明 |
 |---|---|
-| `SPQW_TIEROD_Create` | **前壁選択** → 入力 → 組数分の Solid3d 生成。海側取付 X は前壁の傾斜角から、**矢板径・ピッチは前壁から、取付間隔は「矢板何本ごと」から**自動計算 |
-| `SPQW_TIEROD_Action` | 選択 1 本を、前壁の現在の位置・θ・Z_tip に基づき再計算して再生成(Y は保存値を保持) |
+| `SPQW_TIEROD_Create` | **前壁選択** → 入力 → 組数分の Solid3d 生成。海側取付 X・矢板径・ピッチは前壁から自動計算、**取付間隔は「矢板何本ごと」の整数入力、組数はその入力と前壁総本数から自動算定** |
+| `SPQW_TIEROD_Action` | 選択 1 本を、前壁の現在の位置・Z_tip に基づき再計算して再生成(Y は保存値を保持) |
 | `SPQW_TIEROD_Query` | 諸元・張力照査(鋼種・設計基準・荷重状態)・受杭数量を出力 |
 | `SPQW_TIEROD_Color` | 色番号のみ変更 |
 
@@ -114,7 +116,7 @@
 
 | コマンド | 説明 |
 |---|---|
-| `SPQW_ANCHORPILE_Create` | **前壁選択** → タイロッド軸線に整列した控え杭を、**配置間隔(矢板何本ごと)と本数から一括生成** |
+| `SPQW_ANCHORPILE_Create` | **前壁選択 + 代表タイロッド選択** → タイロッドの配置間隔・本数・軸心標高から自動整列した控え杭を一括生成。位置 Y の始点は図面内の前壁のうち最小 Y(壁の 1 本目)に自動整列 |
 | `SPQW_ANCHORPILE_Action` | 前壁基準の整列位置に再生成(MOVE していても整列位置へ戻る) |
 | `SPQW_ANCHORPILE_Query` | 諸元・整列座標・杭面間浄距離・積算数量(1 本あたり)を出力 |
 | `SPQW_ANCHORPILE_Estimate` | **打撃工法**の打設歩掛積算(4節 3-4.6、**陸上打設のみ**。クローラ式杭打機/クローラクレーンを含む) |
@@ -140,9 +142,9 @@
 
 ### 基本ワークフロー
 
-1. `SPQW_FRONTWALL_Create` — **施設全長と有効幅 B を入力すると本数を自動算出**し、始点から +Y 方向へ壁全体を一括生成(施工順位は 1 始まりで自動採番され、継手の要否・雌雄も自動判定)
-2. `SPQW_TIEROD_Create` — 前壁を選択。矢板径・ピッチは前壁から自動代入され、取付間隔は「矢板何本ごと」の整数入力から算出。海側取付点 X は前壁の θ・Z_tip から自動算出、位置は Y のみピック
-3. `SPQW_ANCHORPILE_Create` — 前壁を選択。タイロッドと同じ「矢板何本ごと」+ 本数を指定すると、タイロッド軸線に整列した位置へ複数本を一括配置
+1. `SPQW_FRONTWALL_Create` — **施設全長と有効幅 B を入力すると本数を自動算出**し、始点から +Y 方向へ壁全体を一括生成(施工順位は 1 始まりで自動採番され、継手の要否・雌雄も自動判定。傾斜角は直杭固定)
+2. `SPQW_TIEROD_Create` — 前壁を選択。矢板径・ピッチは前壁から自動代入され、取付間隔は「矢板何本ごと」の整数入力から算出、**組数はその間隔と前壁総本数から自動算定**。海側取付点 X は前壁の位置から自動算出、位置は Y のみピック
+3. `SPQW_ANCHORPILE_Create` — 前壁と、基準にするタイロッドを選択する。配置間隔・本数・タイロッド軸心標高はそのタイロッドからそのまま自動設定され、複数本を一括配置する
 4. `SPQW_QUAYWALL_Estimate`(数量集計)と、下表から選んだ **1 つ**の打設歩掛積算コマンド
 
 タイロッド・控え杭の入力時には前壁との整合(§8 の部材間チェック)を検査し、不一致はエラー停止する。
@@ -178,12 +180,12 @@
 
 | 部材 | RegApp 名 | 主なキー |
 |---|---|---|
-| 前壁 | `SPQW_FRONTWALL` | `fmt`, `outer_d`, `wall_t`, `length`, `joint`, `grade`, `incl_deg`, `piece_index`, `piece_count`, `effective_width`, `color`, `tip_x`/`tip_y`/`tip_z` + **World 座標点(DxfCode 1011)** |
+| 前壁 | `SPQW_FRONTWALL` | `fmt`, `outer_d`, `wall_t`, `length`, `joint`, `grade`, `incl_deg`, `piece_index`, `piece_count`, `effective_width`, `color`, `head_x`/`head_y`/`head_z` + **World 座標点(DxfCode 1011)** |
 | タイロッド | `SPQW_TIEROD` | `fmt` + 008 の 18 項目 + `front_handle`, `pos_y`, `rod_index` |
 | 控え杭 | `SPQW_ANCHORPILE` | `fmt`, `outer_d`, `wall_t`, `length`, `incl_deg`, `closed_tip`, `span`, `tie_elev`, `tip_elev`, `color`, `pos_y`, `front_handle` |
 
 - エンコードは **「キー=値」の ASCII 文字列 + 形式バージョン `fmt=1`**(008 方式)。数値は `InvariantCulture` で書式化する。
-- **前壁の挿入点は 1011 を併記保存し、読み側は 1011 を優先**する。1011(World space position)は MOVE 等の変換に AutoCAD が自動追随させるため、MOVE 後の `_Action`・`_Query` は移動先の位置で動作する。`tip_x/_y/_z` は人間可読なフォールバック。
+- **前壁の内部表現は杭上端(杭頭)標高 Z_head 基準**(`FrontWallRecord.HeadPoint` / `FrontWallRef.HeadPoint` が正の記録)。杭先端 Z_tip は `PileGeometry.TipFromHead(head, L, θ)` によるソリッド生成・表示専用の計算値であり、タイロッド・控え杭の整列計算(`PileGeometry.AxisXAt` 等)が参照する `FrontWallRef.TipPoint` も同じ計算プロパティとして提供している。挿入点は 1011 を併記保存し、読み側は 1011 を優先する。1011(World space position)は MOVE 等の変換に AutoCAD が自動追随させるため、MOVE 後の `_Action`・`_Query` は移動先の位置で動作する。`head_x/_y/_z` は人間可読なフォールバック。**旧図面(`tip_x/_y/_z` のみを持つ)は読み込み時に全長・傾斜角から自動変換する。**
 - **タイロッド・控え杭は平面 X を保存しない**。前壁 Handle(`front_handle`)と `span` / `tie_elev` から `_Action` のたびに再計算するため、前壁を MOVE したり傾斜角 θ を変更しても整列位置に追随する。Y は 1 本ずつ異なるため両部材とも保存する(タイロッド `pos_y`、控え杭 `pos_y`)。控え杭の `pos_y` は後から追加したキーのため、欠落する旧図面は `_Action` 時に前壁の Y へ整列させる(その旨をコマンドラインに表示する)。
 - 積算コマンドは XData を書き換えない(図形・パラメータとも不変)。
 
@@ -631,33 +633,31 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 | `length` | 全長 L | m | 20.0 | 1〜80 |
 | `jointType` | 継手形式 | − | LT75 | LT65 / LT75 / LT100 / PP / PT |
 | `grade` | 鋼種 | − | SKY400 | SKY400 / SKY490 |
-| `wallLength` | 施設全長 | m | 100.000(2026-07-29、旧 10.000) | 0.1〜1000(`_Create` のみ。**外径 D より先に入力**、2026-07-29) |
+| `wallLength` | 施設全長 | m | 100.000 | 0.1〜1000(`_Create` のみ。**外径 D より先に入力する**) |
 | `effectiveWidth` | 鋼管矢板 有効幅 B(継手考慮) | m | 外径・継手形式から自動算出 | 0.5〜2.5(`_Create` のみ) |
 | `pieceCount` | 総本数 | 本 | **`_Create` では自動算出** | 1〜500(`_Action` のみ入力) |
 | `pieceIndex` | 施工順位 | 本目 | **`_Create` では 1 始まりで自動採番** | 1〜`pieceCount`(`_Action` のみ入力) |
 | `colorIndex` | 本管の色 | ACI | 8 | 1〜255 |
-| `headElevation` | 杭上端(杭頭)標高 Z_head | m(D.L.) | Z_tip + L = **2.000**(既定 Z_tip=−18.0m・L=20.0m のとき) | 内部の Z_tip 換算値が −80〜10(2026-07-29、`tipElevation` から変更) |
+| `headElevation` | 杭上端(杭頭)標高 Z_head | m(D.L.) | −18.0(既定 Z_tip)+ 20.0(既定 L)= **2.000** | 変換後の Z_tip が −80〜10 に収まること |
 | `planPoint` | 始点(1 本目の杭中心) | m | − | UCS ピック → WCS 変換(Z は使わない) |
 
-**傾斜角 θ のプロンプトは廃止し、直杭(θ=0)のみとした**(2026-07-29)。`FrontWallRecord.InclDeg` フィールド自体は残っているが、`SPQW_FRONTWALL_Create` / `_Action` は常に `0.0` を書き込む(既存の傾斜杭図面を `_Action` で再生成すると直杭に変わる点に注意)。杭上端標高 Z_head の変換は三角関数を使わない単純な加減算(`Z_tip = Z_head − L`)になった。`SPQW_FRONTWALL_ImportCsv`(帳票 CSV 取り込み)は今回変更しておらず、`incl_deg` 列を指定すれば引き続き傾斜杭を取り込める。
+**傾斜角 θ は入力しない(直杭のみ)**。`FrontWallRecord.InclDeg` フィールド自体は残っているが、`SPQW_FRONTWALL_Create` / `_Action` は常に `0.0` を書き込む(既存の傾斜杭図面を `_Action` で再生成すると直杭になる)。`SPQW_FRONTWALL_ImportCsv`(帳票 CSV 取り込み)は `incl_deg` 列を指定すれば引き続き傾斜杭を取り込める。
+
+**杭上端標高 Z_head は前壁の内部表現そのもの**であり、入力値をそのまま `FrontWallRecord.HeadPoint` / XData(`head_x/_y/_z`)へ格納する。杭先端標高 Z_tip は `PileGeometry.TipFromHead(Z_head, L, θ)`(直杭のため `Z_tip = Z_head − L` の単純計算)によるソリッド生成・表示専用の計算値になった。範囲チェックはこの変換後の Z_tip に対して行う。旧図面(`tip_x/_y/_z` のみを持つ)は読み込み時に Z_head へ自動変換する。
 
 **`_Create` の壁一括生成**(`FrontWall.WallLayout`)
 
 | 派生量 | 計算式 | 既定値での結果 |
 |---|---|---|
-| 本数 | `ceil((施設全長 − 0.001) ÷ 有効幅)` | 10.000 ÷ 0.8752 = 11.426 → **12 本** |
+| 本数 | `ceil((施設全長 − 0.001) ÷ 有効幅)` | 10.000 ÷ 0.8752 = 11.426 → **12 本**(既定の施設全長 100m では 115 本) |
 | 実延長 | `本数 × 有効幅` | 12 × 0.8752 = **10.502 m**(+0.502 m 超過) |
 | 各本の Y | `始点Y + (施工順位 − 1) × 有効幅` | 0.000, 0.875, …, 9.628 |
 
-端数は**切り上げ**(施設全長を必ずカバーするが終点は行き過ぎる。決定日 2026-07-29)。誤差許容 1mm を差し引いてから割るため、ちょうど整数倍のとき(8.752 ÷ 0.8752 = 10)に浮動小数誤差で 1 本増えることはない。
+端数は**切り上げ**(施設全長を必ずカバーするが終点は行き過ぎる)。誤差許容 1mm を差し引いてから割るため、ちょうど整数倍のとき(8.752 ÷ 0.8752 = 10)に浮動小数誤差で 1 本増えることはない。本数が 500 本(`PieceAssignment.PieceCount_Max`)を超える組合せは**エラー停止**する(施設全長を分割して生成する)。
 
-有効幅 B は入力値を優先する。外径・継手形式から算出される値と 1mm を超えて食い違う場合は**警告を表示して続行**する(エラー停止しない)。**実際に確定した B は XData(`effective_width`)に記録され、`SPQW_TIEROD_Create` / `SPQW_ANCHORPILE_Create` / `SPQW_QUAYWALL_Estimate` はこの値を使う**(`FrontWallRef.ResolveEffectiveWidth`)ため、カスタム B のままタイロッド・控え杭・施設積算まで一貫して整合する(2026-07-29、以前は再計算した算出値を使っておりカスタム B との食い違いを検出できなかった。§9.3 参照)。旧図面(`effective_width` キーが無い)は算出値にフォールバックする。
+有効幅 B は入力値を優先する。外径・継手形式から算出される値と 1mm を超えて食い違う場合は**警告を表示して続行**する(エラー停止しない)。**実際に確定した B は XData(`effective_width`)に記録され、`SPQW_TIEROD_Create` / `SPQW_ANCHORPILE_Create` / `SPQW_QUAYWALL_Estimate` はこの値を使う**(`FrontWallRef.ResolveEffectiveWidth`)ため、カスタム B のままタイロッド・控え杭・施設積算まで一貫して整合する。旧図面(`effective_width` キーが無い)は算出値にフォールバックする。
 
-本数が 500 本(`PieceAssignment.PieceCount_Max`)を超える組合せは**エラー停止**する(施設全長を分割して生成する)。
-
-**入力は杭上端(杭頭)標高 Z_head、内部は杭先端標高 Z_tip のまま**(2026-07-29)。標高入力は現場で測りやすい杭頭側に揃える一方、XData・タイロッド/控え杭の整列計算(`PileGeometry.AxisXAt` 等)は従来どおり Z_tip を前提に組まれているため、内部表現・XData キー(`tip_z`)は変更していない。`SPQW_FRONTWALL_Create` / `_Action` とも、入力された Z_head を `Z_tip = Z_head − L·cosθ` で変換してから格納する(既定値は逆に `PileGeometry.HeadElevation` で Z_tip → Z_head を表示)。範囲外(Z_tip が −80〜10m を外れる)は変換後にエラー停止する。
-
-`SPQW_FRONTWALL_Action` は従来どおり 1 本の再生成であり、総本数・施工順位を明示入力する(施設全長・有効幅の入力は無いため対象外。色・標高の入力が Z_head に変わった点は `_Create` と共通)。
+`SPQW_FRONTWALL_Action` は 1 本の再生成であり、総本数・施工順位を明示入力する(施設全長・有効幅の入力は無いため対象外)。
 
 ### 5.2 打設歩掛積算
 
@@ -732,7 +732,7 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 
 ### 5.3 タイロッド
 
-008 の 18 項目のうち、鋼種・設計基準・荷重状態・腹起し溝形鋼高さ・定着プレート厚・定着ワッシャー厚・ナット高さ・調節長の 8 項目はプロンプトを廃止した(2026-07-29)。海側鋼管矢板径・矢板ピッチは選択した前壁から既定値を提示する。
+008 の 18 項目のうち、鋼種・設計基準・荷重状態・腹起し溝形鋼高さ・定着プレート厚・定着ワッシャー厚・ナット高さ・調節長・取付点反力 Ap の 9 項目はプロンプトを廃止した。海側鋼管矢板径・矢板ピッチは選択した前壁から既定値を提示する。
 
 | 英語名 | 日本語名 | 単位 | デフォルト値 | 範囲 |
 |---|---|---|---|---|
@@ -741,9 +741,9 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 | `spanLength` | 法線直角方向延長 span | m | 10.000 | 3.000〜40.000 |
 | `pileDiameter` | 海側鋼管矢板径 | m | **前壁から自動代入(入力を求めない)** | 前壁の外径と一致 |
 | `pilePitch` | 鋼管矢板ピッチ | m | **前壁から自動代入(入力を求めない)** | 前壁が壁一括生成で実際に使った有効幅 B(`FrontWallRef.ResolveEffectiveWidth`)と一致。旧図面は外径・継手形式からの算出値にフォールバック |
-| `everyNPiles` | タイロッド取付間隔(矢板何本ごと) | 本 | 1(2026-07-29、旧 3) | 1〜50、かつ間隔が 0.600〜20.000 m |
+| `everyNPiles` | タイロッド取付間隔(矢板何本ごと) | 本 | 1 | 1〜50、かつ間隔が 0.600〜20.000 m |
 | `tieSpacing` | タイロッド取付間隔 | m | **`pilePitch × everyNPiles` で自動算出** | 派生量(ピッチの整数倍が構造的に保証される) |
-| `tieCount` | 組数 | 組 | **前壁の総本数と `everyNPiles` から自動算定(入力を求めない)**(2026-07-29) | `TieRodPitch.CountFor(pieceCount, everyNPiles)` = `(pieceCount-1)/everyNPiles + 1`(1 本目に配置し以降 n 本ごと) |
+| `tieCount` | 組数 | 組 | **前壁の総本数と `everyNPiles` から自動算定(入力を求めない)** | `TieRodPitch.CountFor(pieceCount, everyNPiles)` = `(pieceCount-1)/everyNPiles + 1`(1 本目に配置し以降 n 本ごと) |
 | `hwl` | H.W.L. 標高 | m(D.L.) | 2.000 | 0.000〜5.000 |
 | `tieElevation` | タイロッド軸心標高 | m(D.L.) | `hwl` + 0.500 | −5.000〜10.000 |
 | `layerColor` | 色 | ACI | 8 | 1〜255 |
@@ -751,7 +751,7 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 
 `span_length` は「前壁矢板中心 〜 陸側定着面」の水平距離(積算基準 3-4.5-(13))。定着金物はこの面より陸側へ張り出す。
 
-**プロンプト廃止後も内部の計算式(全長・質量・張力照査)は変更していない**(2026-07-29)。廃止した 9 項目(鋼種・設計基準・荷重状態・腹起し溝形鋼高さ・定着プレート厚・定着ワッシャー厚・ナット高さ・調節長・取付点反力 Ap)は `TieRodParameters` のプロパティとしては残り、`SPQW_TIEROD_Create` では以下の固定値、`SPQW_TIEROD_Action` では前回保存値(XData)がそのまま計算に使われる。
+**プロンプト廃止後も内部の計算式(全長・質量・張力照査)は変更していない**。廃止した 9 項目は `TieRodParameters` のプロパティとしては残り、`SPQW_TIEROD_Create` では以下の固定値、`SPQW_TIEROD_Action` では前回保存値(XData)がそのまま計算に使われる。
 
 | 項目 | 固定値(`_Create`) | 備考 |
 |---|---|---|
@@ -767,7 +767,7 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 
 ### 5.4 控え杭
 
-`SPQW_ANCHORPILE_Create` は前壁選択に加え、**代表となるタイロッドの選択**を求める(2026-07-29)。タイロッド軸心標高・配置間隔・本数はこのタイロッドの XData(`TieElevation`/`TieSpacing`/`TieCount`)からそのまま自動設定され、対応する入力プロンプトは廃止した。
+`SPQW_ANCHORPILE_Create` は前壁選択に加え、**代表となるタイロッドの選択**を求める。タイロッド軸心標高・配置間隔・本数はこのタイロッドの XData(`TieElevation`/`TieSpacing`/`TieCount`)からそのまま自動設定され、対応する入力プロンプトは廃止した。
 
 | 英語名 | 日本語名 | 単位 | デフォルト値 | 範囲 |
 |---|---|---|---|---|
@@ -780,10 +780,12 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 | `closedTip` | 先端形状 | − | 開端 | 開端 / 閉端 |
 | `span` | 法線直角方向延長 | m | 10.0 | 3.0〜40.0 |
 | `tieElevation` | タイロッド軸心標高 Z_tr | m(D.L.) | **タイロッドから自動代入(入力を求めない)** | 選択したタイロッドの `TieElevation` と一致(`_Action` は前回保存値を保持) |
-| `headElevation` | 杭上端(杭頭)標高 Z_head | m(D.L.) | **前壁の杭上端標高(前壁の Z_tip + L)をそのまま使用**(控え杭自身の全長・傾斜角による式では算出しない、2026-07-29) | 内部の Z_tip 換算値が −80〜10(2026-07-29、`tipElevation` から変更) |
+| `headElevation` | 杭上端(杭頭)標高 Z_head | m(D.L.) | **前壁の杭上端標高をそのまま使用**(控え杭自身の全長・傾斜角では算出しない) | 内部の Z_tip 換算値が −80〜10 |
 | `colorIndex` | 本管の色 | ACI | 8 | 1〜255 |
-| `everyNPiles` / `pileCount` | 控え杭 配置間隔・本数 | − | − | **タイロッドから自動代入(入力を求めない)**。選択したタイロッドの `TieSpacing`/`TieCount` をそのまま使う(2026-07-29、`_Create` のみ) |
-| `positionY` | 位置 Y | m | **図面内の全前壁のうち杭中心 Y が最小のもの(壁の 1 本目)に自動整列**(2026-07-29) | 派生量。2 本目以降は `始点Y + i × 配置間隔`(`_Action` は保存値を保持) |
+| `everyNPiles` / `pileCount` | 控え杭 配置間隔・本数 | − | − | **タイロッドから自動代入(入力を求めない)**。選択したタイロッドの `TieSpacing`/`TieCount` をそのまま使う(`_Create` のみ) |
+| `positionY` | 位置 Y | m | **図面内の全前壁のうち杭中心 Y が最小のもの(壁の 1 本目)に自動整列** | 派生量。2 本目以降は `始点Y + i × 配置間隔`(`_Action` は保存値を保持) |
+
+控え杭は前壁と異なり**傾斜角プロンプトを維持**している(斜杭の需要があるため)。杭上端標高 Z_head 入力後の内部 Z_tip への変換は控え杭自身の全長・傾斜角を使う。
 
 **タイロッド軸心標高 Z_tr は入力パラメータとして削除**。整列計算(`AnchorAlignment.Compute`/`Validate`)は引き続き Z_tr を使うため、`AnchorInput.TieElevM` フィールド自体は残っている。`_Create` は選択したタイロッドの `TieElevation` を自動代入し、`_Action` は再選択せず前回保存値(XData)をそのまま使う。
 
@@ -803,7 +805,7 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 | `incl_deg` / `傾斜角` | inclinationDeg | − |
 | `piece_count` / `総本数`、`piece_index` / `施工順位` | pieceCount, pieceIndex | −(**両方無ければ CSV の総行数・出現順で自動採番**。壁一括生成の既定動作) |
 | `color` / `色` | colorIndex | − |
-| `tip_z` / `杭先端標高` | tipElevation [m] | ○ |
+| `tip_z` / `杭先端標高` | tipElevation [m] | ○(取り込み時に杭上端標高へ内部変換する) |
 
 平面位置は CSV に持たせず、コマンド実行時に「1 本目の位置」を 1 回だけピックし、以降は各行の外径・継手から有効幅 B を計算して +Y へ自動配置する。
 
@@ -811,7 +813,7 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 
 | 列 | 対応パラメータ |
 |---|---|
-| `rod_d`, `grade`, `code`, `state`, `span_length`, `pile_d`, `pile_pitch`, `tie_spacing`, `tie_count`, `hwl`, `tie_elev`, `waling_h`, `plate_t`, `washer_t`, `nut_h`, `adjust_l`, `anchor_reaction`, `color` | §5.2 の同名パラメータ(単位は m。mm 境界は無い) |
+| `rod_d`, `grade`, `code`, `state`, `span_length`, `pile_d`, `pile_pitch`, `tie_spacing`, `tie_count`, `hwl`, `tie_elev`, `waling_h`, `plate_t`, `washer_t`, `nut_h`, `adjust_l`, `anchor_reaction`, `color` | §5.3 の同名パラメータ(単位は m。mm 境界は無い) |
 | `pos_y` / `Y` / `位置y` | positionY [m](**必須**。前壁からの相対位置は自動計算できないため) |
 
 **控え杭**(`SPQW_ANCHORPILE_ImportCsv`)
@@ -854,7 +856,7 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 
 タイロッドの `pile_d` / `pile_pitch` は前壁の外径 / 有効幅 B と一致しなければ `CrossMemberValidator` で行ごと弾かれる(誤差許容 1mm)。`tie_spacing` は `pile_pitch` の整数倍であること。
 
-控え杭の `pos_y` 列は**必須**。省略すると全行が同一座標に重なるため、エラー停止する(旧版はこの列自体が無く重なっていた。§9.2 の 7)。
+控え杭の `pos_y` 列は**必須**。省略すると全行が同一座標に重なるため、エラー停止する。
 
 ### 5.6 柱状図 CSV(加重平均N値の算出、`SpqwNodes.CalcWeightedN`)
 
@@ -901,7 +903,7 @@ CSV の行順は問わない(標高上端の降順に自動で並べ替えたう
 | 継手 3D モデルの幾何整合性(LT65/LT75/LT100) | `FrontWall.JointFit` で検証済み。A側(山形鋼)・B側(T形鋼受け)を有効幅 B のピッチで配置すると、D=500〜2000mm の範囲で干渉せず、最小離隔は径によらず約5.5mmで一定(`JointPlacement` の変換式が A側・B側とも半径 R を単純加算する構造のため)。**PP/PT(円形継手管の絡み合い型)は対象外**、多角形交差判定では噛み合わせを正しく評価できない(§9.4 の縮退辺除去とは別の話。PP/PT の A側自己交差は縮退辺除去で解消済みだが、A側⟺B側の噛み合わせ評価自体は未対応) | 確定(LT100 含む) |
 | 継手の要否・雌雄 | 施工順位から一意(`pieceIndex > 1` で −Y 側、`pieceIndex < pieceCount` で +Y 側) | 確定 |
 | 継手質量(側別) | A 側(+Y): LT = 山形鋼×2 / PP・PT = 鋼管。B 側(−Y): LT・PT = T 形鋼 / PP = 鋼管 | 確定 |
-| 杭頭標高 | Z_tip + L·cos θ | 確定 |
+| 杭先端標高 Z_tip | `PileGeometry.TipFromHead(Z_head, L, θ)`。直杭のため `Z_head − L` の単純計算(内部表現は Z_head が正、Z_tip がこの計算値) | 確定 |
 
 ### 6.2 打設歩掛 — 打撃工法(4節 3-4.5)
 
@@ -970,7 +972,7 @@ CSV の行順は問わない(標高上端の降順に自動で並べ替えたう
 | 派生量 | 計算式・出典 | 信頼度 |
 |---|---|---|
 | 全長 | span + (t1 + t2 + ナット高さ + 調節長) × 2 + h(積算基準 3-4.5-(13)) | 確定 |
-| 海側取付点 X | 前壁の杭先端 X + (`tie_elevation` − Z_tip)·tan θ | 確定 |
+| 海側取付点 X | 前壁の杭先端 X + (`tie_elevation` − Z_tip)·tan θ(前壁 θ は常に 0 のため実質は前壁の X と一致) | 確定 |
 | 断面積 / 体積 / 質量 | カタログ規格径へスナップした呼び径による | 確定 |
 | 本体本数 / ターンバックル / リングジョイント | 継手方法表 | 確定 |
 | 受杭箇所数 | 積算基準 3-4.5-(14)。法線方向は「タイロッド 1 本おき」で組数の切上げ半数 | 確定 |
@@ -1009,7 +1011,7 @@ CSV の行順は問わない(標高上端の降順に自動で並べ替えたう
 Core 層は AutoCAD 非依存のため WSL / Linux でもビルド・テストできる。Plugin 層は AutoCAD が必要で、無い環境ではスタブで構文検証まで行う。
 
 ```bash
-# Core + テスト(AutoCAD 不要。668 件が green であること)
+# Core + テスト(AutoCAD 不要。671 件が green であること)
 dotnet test tests/SheetPileQuayWall.Core.Tests -c Release
 
 # Plugin の構文検証(AutoCAD 不要。スタブとリンクする。配布不可)
@@ -1037,7 +1039,7 @@ AutoCAD が既定パス以外にある場合は `-p:AcadRoot="..."` を指定す
 
 `update-project.bat` を使わず手動で ZIP を展開している場合、`obj` / `.vs` フォルダへ前のフォルダ名を含む古いキャッシュが残り、NuGet の依存関係解決やプロジェクト間のビルド成果物の参照が壊れることがある。[`scripts/fix-restore.bat`](scripts/fix-restore.bat) をダブルクリックすると、`.vs` / `obj` / `bin` の削除、`dotnet restore`、`dotnet build`(Core → Plugin の順)までを自動実行する。実行後は Visual Studio を再起動し、`SheetPileQuayWall.Plugin.csproj` を開き直すこと。
 
-> `-p:Platform=x64` を手動ビルドコマンドに付けないこと。`Core.csproj` には `<Platforms>` の指定が無く、`Platform` を強制すると出力先が `bin\x64\...` という Visual Studio が期待しない場所になり、CS0006 の原因になる(2026-07-29 実機で確認)。
+> `-p:Platform=x64` を手動ビルドコマンドに付けないこと。`Core.csproj` には `<Platforms>` の指定が無く、`Platform` を強制すると出力先が `bin\x64\...` という Visual Studio が期待しない場所になり、CS0006 の原因になる(実機で確認済み)。
 
 ### AutoCAD / Civil 3D への登録(NETLOAD)
 
@@ -1076,7 +1078,7 @@ AutoCAD コマンド(NETLOAD)と Dynamo ノード(Import Library)は独立した
 │   │   │                                 VibroJetEstimate(ジェット併用)
 │   │   │                                 DriveEquipment(打撃工法の杭打機・杭打船選定)
 │   │   ├── TieRod/                      008 移植 5 + 新規 2(TieRodPlacement /
-│   │   │                                 TieRodPitch「矢板何本ごと」→取付間隔)
+│   │   │                                 TieRodPitch「矢板何本ごと」→取付間隔・組数)
 │   │   ├── AnchorPile/                  006@6d6d8cf 由来(書き直し)4 + 新規 1
 │   │   │                                 (AnchorDriveEstimate。4節3-4.6 陸上打設)
 │   │   ├── Import/                      帳票 CSV 取り込み(CsvTable・各部材の Importer・
@@ -1092,7 +1094,7 @@ AutoCAD コマンド(NETLOAD)と Dynamo ノード(Import Library)は独立した
 │       │                                 打設歩掛積算 4 系統。すべて AutoCAD 非依存の純計算)
 │       └── DrawingHelper.cs / Prompt.cs / SolidBuilder.cs
 ├── stubs/                               AutoCAD API スタブ(構文検証専用。配布禁止)
-├── tests/SheetPileQuayWall.Core.Tests/  xUnit 668 ケース + fixtures/
+├── tests/SheetPileQuayWall.Core.Tests/  xUnit 671 ケース + fixtures/
 ├── scripts/
 │   ├── port-from-legacy.sh              007/008 からの冪等移植
 │   └── verify-dll-versions.ps1          参照 DLL バージョン実測(CLAUDE.PRIVATE.md §9)
@@ -1124,7 +1126,7 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 - **006 / 007 / 008 へのプロジェクト参照・アセンブリ参照を追加しない**。共通ロジックは 009 内にコードとして移植する。
 - 整合性チェックの誤差許容は **1 mm = 0.001 m**。不一致時はエラー停止し、自動補正も再生成もしない(外径の JIS / カタログスナップのみ例外)。
 - **基準の表で「−」のセルは `null` として扱い、0 に潰さない**。0 として計算に混入すると打込み時間が消える等の誤りにつながるため、該当する組合せではエラー停止する。
-- 旧 RegApp(`STEELPIPEPILE` / `SPSP` / `TAIROD_PARAM` / `ANCHORPILE`)で作成した既存図面との**互換は持たない**。旧図面は旧プラグインで扱うか 009 で再作成する。
+- 旧 RegApp(`STEELPIPEPILE` / `SPSP` / `TAIROD_PARAM` / `ANCHORPILE`)で作成した既存図面との**互換は持たない**。旧図面は旧プラグインで扱うか 009 で再作成する。009 自身の旧バージョン(`tip_x/_y/_z` 形式の前壁 XData 等)とは自動変換で互換を保つ(§3 XData 設計)。
 
 ### 部材間の整合性チェック
 
@@ -1162,10 +1164,10 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 | 1 | **ジェット併用の γ は代表 1 層で算定**。基準 3-16-19 は 4 土質の打込み長による加重平均を定めており、Core に `VibroJetEstimate.WeightedGamma` を用意してあるが、コマンドは対話入力の負担を考えて代表 1 層のみを受け取る。互層の現場では Core API を直接使うか、加重平均済みの値を入力すること。 |
 | 2 | **ジェット併用の配管系部材・導材・拘束費は未実装**。配管系部材の材料費・取付費(3-16-22)、導材(3-1-8、4節の準用)、作業船の拘束費(3-16-23)はいずれも打設とは別の代価表。 |
 | 3 | **振動工法の陸上打設(バイブロ単独)は基準に鋼管矢板の歩掛が無い**。16節 3-2 の適用範囲は海上打設に限られ、陸上のバイブロ歩掛(16節 2-1)は鋼矢板・H 形鋼杭が対象で鋼管矢板を含まない。そのため `SPQW_FRONTWALL_VibroEstimate` は施工区分を尋ねず海上固定としている。 |
-| 4 | ~~前壁の壁一括生成が無い~~ → **`SPQW_FRONTWALL_Create`(施設全長 ÷ 有効幅)と `SPQW_FRONTWALL_ImportCsv`(帳票 CSV)の 2 系統で解消**。ただし両者とも**直線配置のみ・全数同一諸元(`_Create` の場合)**を想定しており、平面線形が曲がる・折れる岸壁には対応しない。`_ImportCsv` は各矢板の Y を「1 つ前の矢板自身の有効幅」だけ加算して求めるため、外径・継手が変化する遷移区間では概算になる(§9.1 の 5 とあわせて実データでの検証が必要)。**1 本ずつ諸元を変えたい場合は `_ImportCsv`、1 本だけ直したい場合は `_Action` を使う**(`_Create` は壁一括生成に変更されたため、1 本だけの生成には使えない)。 |
+| 4 | 前壁の壁一括生成は `SPQW_FRONTWALL_Create`(施設全長 ÷ 有効幅)と `SPQW_FRONTWALL_ImportCsv`(帳票 CSV)の 2 系統。ただし両者とも**直線配置のみ・全数同一諸元(`_Create` の場合)**を想定しており、平面線形が曲がる・折れる岸壁には対応しない。`_ImportCsv` は各矢板の Y を「1 つ前の矢板自身の有効幅」だけ加算して求めるため、外径・継手が変化する遷移区間では概算になる(§9.1 の 5 とあわせて実データでの検証が必要)。**1 本ずつ諸元を変えたい場合は `_ImportCsv`、1 本だけ直したい場合は `_Action` を使う**(`_Create` は壁一括生成のため、1 本だけの生成には使えない)。 |
 | 5 | **工種体系へのマッピングは未実装**。`SPQW_QUAYWALL_Estimate` は鋼材質量の集計までで、『港湾工事工種体系ツリー.md』のレベル体系への対応付けは行っていない。 |
-| 6 | ~~打設歩掛の Dynamo ノードは未実装~~ → **§4.5〜4.8 の 4 ノードで解消**(前壁の打撃/バイブロ単独/ジェット併用、控え杭の打撃工法)。ただし D/t/L 等の寸法チェックは行わないため、AutoCAD コマンド側(範囲チェックあり)より入力ミスに気付きにくい点に注意。 |
-| 7 | **タイロッド・控え杭の帳票 CSV は平面位置 Y(`pos_y`)が必須列**。前壁 CSV のような自動配置(有効幅の累積)は行わない。~~控え杭は Y を指定できず一括生成すると全数が重なる~~ → **`AnchorInput.PositionY` の新設で解消**(XData キー `pos_y`、CSV 列 `pos_y`/`Y`/`位置y`)。対話コマンド `SPQW_ANCHORPILE_Create` は「矢板何本ごと」+ 本数から自動配置するため Y の入力は不要。 |
+| 6 | 打設歩掛の Dynamo ノードは §4.5〜4.8 の 4 ノード(前壁の打撃/バイブロ単独/ジェット併用、控え杭の打撃工法)で実装済み。ただし D/t/L 等の寸法チェックは行わないため、AutoCAD コマンド側(範囲チェックあり)より入力ミスに気付きにくい点に注意。 |
+| 7 | **タイロッド・控え杭の帳票 CSV は平面位置 Y(`pos_y`)が必須列**。前壁 CSV のような自動配置(有効幅の累積)は行わない。対話コマンドは前壁・タイロッドの XData から配置間隔・本数を自動算定するため Y の入力は不要(`SPQW_TIEROD_Create` は「矢板何本ごと」の整数入力のみ、`SPQW_ANCHORPILE_Create` はタイロッド選択のみ)。 |
 | 8 | **控え杭の帳票 CSV は前壁との整合チェックを取り込み時に行えない**。外径・肉厚・全長の単体範囲チェックのみを取り込み時に行い、前壁との span 干渉チェック(`AnchorAlignment.Validate`)は前壁選択後に `SPQW_ANCHORPILE_ImportCsv` 内で行う(§5.5 に記載)。 |
 | 9 | **控え杭の打設歩掛は陸上打設のみ**(`SPQW_ANCHORPILE_Estimate`)。4節 3-4.6 には海上打設の船団構成・労務編成もあるが未実装。前壁が `_Estimate`→`_VibroEstimate`→`_VibroJetEstimate` と段階的に増えたのと同様、海上版は追加できる。 |
 | 10 | **ジェット併用のメイン船(クレーン付台船・起重機船)はトン数ランクまで選定していない**。`SPQW_FRONTWALL_VibroJetEstimate` は必要吊上げ荷重 Cf(=(Wv+Wp)×6)の数値を示すのみで、バイブロ単独(16節 3-2)のように「◯◯t吊」という具体的なランクへ変換する表は 3-1 節側に見当たらず未実装。付帯船舶(台船・引船・揚錨船・潜水士船)は両工法とも実装済み。 |
@@ -1185,11 +1187,13 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 
 - **007 の継手質量にバグがある**。`JointCatalog.JointMassPerM` は P-P 形で鋼管を 1 本分(34.7 kg/m)しか数えないが、`JointShapes` の実形状は両側とも φ165.2×9 の鋼管であり、正しくは 69.4 kg/m(約 50% の過小評価)。009 では `JointMass`(側別質量)を新設して積算に使っており、移植元のファイルは変更していない(`port-from-legacy.sh` の再実行で失われるため)。**007 側の修正は別途必要。**
 - **008 の `TieRodParameters.SpanLength` の XML コメントが誤っている**。「控工中心まで」とあるが、008 の README 図・算定式・006 の定義はいずれも「前壁矢板中心〜陸側定着面」を指す。009 では正しい定義でコメント・プロンプトを記述している。
-- **007 の `JointShapes`(継手断面、DXF 抽出データ)に極端に短い辺・極薄のノッチが含まれる**。`SPQW_FRONTWALL_Create` を実機で実行すると `Region.CreateFromCurves` が `eInvalidInput` で失敗する形で顕在化した(2026-07-29、2回)。抽出時の丸め誤差とみられる問題が2種類見つかっている。(1) 極端に短い辺(実測 最小 0.0023mm。本来同一点であるべき座標が僅かにずれて2点として記録されている)。(2) 縮退はしていないが隣接3点が完全に同一直線上にあり進行方向が反転する極薄のノッチ(LT65/75/100 共通の `LoopsB` で実測。ある点から35.7mm進んだ直後、次の点でわずか0.177mm逆方向に戻る)。1点目の対処だけでは2点目のノッチが残って再クラッシュしたため、2種類とも別処理として実装した。`JointShapes.cs` は手編集禁止のため、`FrontWall.PolygonCleanup.RemoveDegenerateVertices`(縮退辺)→`RemoveNearCollinearVertices`(共線点)の順で押し出し直前に除去する対処とした(`SolidBuilder.JointMember`)。副次的に、PP/PT の `LoopsA` で検出されていた自己交差(§6.1 の脚注参照)も、縮退辺による交差判定の誤検出だったことが判明し、除去後は解消した。**007 側の DXF 再抽出は別途検討が必要。**
+- **007 の `JointShapes`(継手断面、DXF 抽出データ)に極端に短い辺・極薄のノッチが含まれる**。`SPQW_FRONTWALL_Create` を実機で実行すると `Region.CreateFromCurves` が `eInvalidInput` で失敗する形で顕在化した(2 回)。抽出時の丸め誤差とみられる問題が2種類見つかっている。(1) 極端に短い辺(実測 最小 0.0023mm。本来同一点であるべき座標が僅かにずれて2点として記録されている)。(2) 縮退はしていないが隣接3点が完全に同一直線上にあり進行方向が反転する極薄のノッチ(LT65/75/100 共通の `LoopsB` で実測。ある点から35.7mm進んだ直後、次の点でわずか0.177mm逆方向に戻る)。1点目の対処だけでは2点目のノッチが残って再クラッシュしたため、2種類とも別処理として実装した。`JointShapes.cs` は手編集禁止のため、`FrontWall.PolygonCleanup.RemoveDegenerateVertices`(縮退辺)→`RemoveNearCollinearVertices`(共線点)の順で押し出し直前に除去する対処とした(`SolidBuilder.JointMember`)。副次的に、PP/PT の `LoopsA` で検出されていた自己交差(§6.1 の脚注参照)も、縮退辺による交差判定の誤検出だったことが判明し、除去後は解消した。**007 側の DXF 再抽出は別途検討が必要。**
 
 ### 9.5 実機動作確認
 
 **未実施。**開発機に AutoCAD 2025 が無いため、Plugin 層はスタブによる構文・型検証までしか行えていない。実機での検証項目は `docs/implementation-plan.md` §13.5 を参照。参照 DLL バージョンも未検証(§2 の警告)。
+
+前壁の内部構造を Z_head 基準へ作り替える一連の変更(§10)は WSL 側のロジック検証(671 件のテスト、ヘルパー関数での逆算一致確認)のみで確認しており、実機での NETLOAD・図面生成・MOVE 追随・旧図面の自動変換は未検証。
 
 ---
 
@@ -1197,74 +1201,75 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 
 それ以前の機能追加履歴(帳票 CSV 取り込み・付帯船舶・控え杭打設歩掛・柱状図解析ノード・Dynamo 節全面改訂の経緯)は git log と [`docs/implementation-plan.md`](docs/implementation-plan.md) の変更履歴を参照。
 
-**`SPQW_ANCHORPILE_Create` / `_Action` の杭上端標高デフォルトを前壁と同じ値に変更**(`AnchorPileCommands.cs` のみ)
+**前壁鋼管矢板の内部構造を杭先端標高 Z_tip 基準から杭上端(杭頭)標高 Z_head 基準へ作り替え**(Core `FrontWallRef`/`FrontWallPlacement`/`PileGeometry`、Plugin `FrontWallRecord`(XData)/`FrontWallCommands`/`DrawingHelper`/`ImportCommands`/`AnchorPileCommands`)
 
-- 杭上端標高 Z_head の既定値を、控え杭自身の全長・傾斜角から式(`PileGeometry.HeadElevation(a.TipElevM, L, θ)`)で逆算する方式から、**前壁の杭上端標高をそのまま使う**方式(`front.TipPoint.Z + front.LengthM`、単純な数値計算)に変更した。従来は控え杭の全長・傾斜角が前壁と異なる場合、既定値が前壁の実際の杭上端標高からずれていた(控え杭は前壁と異なる全長で計画されることが多く、両者の頭は同じ施工基面に揃える想定のため、既定値は前壁自身の値をそのまま使うのが妥当)。
-- Z_head 入力後の内部 Z_tip への変換(`Z_head − L·cosθ`)は控え杭自身の全長・傾斜角のままで変更していない(控え杭は前壁と異なり傾斜角プロンプトを維持しているため)。
-- Core 層の変更は無い(テストは 669 ケースのまま)。
+- `FrontWallRecord.HeadPoint` / `FrontWallRef.HeadPoint` が正の記録になり、XData キーも `tip_x/_y/_z` → `head_x/_y/_z` に変更した。`SPQW_FRONTWALL_Create`/`_Action` で入力した Z_head をそのまま格納するため、以前の「入力だけ Z_head 化し内部は Z_tip のまま変換して格納する」方式(往復変換あり)から、変換の往復が無い方式になった。
+- 杭先端標高 Z_tip は新設 `PileGeometry.TipFromHead(head, L, θ)`(`LocalToWorld` の厳密な逆演算)によるソリッド生成・表示専用の計算値になった。
+- **`FrontWallRef.TipPoint` は計算プロパティとして残した**(`HeadPoint`・`LengthM`・`InclDeg` から都度算出)ため、前壁の Z_tip を前提に組まれているタイロッド整列(`TieRodPlacement.SeaAttachmentX`)・控え杭整列(`AnchorAlignment.Compute`/`Validate`)の Core コードは**一切変更していない**。前壁の傾斜角は既に θ=0 固定のため、これらの計算結果も従来と変わらない(671 件のテストで数値が一致することを確認)。
+- **旧図面(`head_x/_y/_z` が無く `tip_x/_y/_z` のみを持つ)は読み込み時に自動変換する**。その図面自身の全長・傾斜角から `PileGeometry.LocalToWorld` で杭上端標高を逆算するため、θ が 0 でない旧図面も正しく変換される。MOVE 追随用の 1011(World 座標点)も同様に変換してから採用する。
+- 前壁 CSV 取り込み(`SPQW_FRONTWALL_ImportCsv`)は列自体は変更していない(`tip_z`/`杭先端標高` 列のまま)。`ImportCommands.cs` が読み取った値を `PileGeometry.LocalToWorld` で杭上端標高へ変換してから `FrontWallRecord` を組み立てる。
+- 新規 Core テスト T1302・T1303(`PileGeometry.TipFromHead`)を追加。既存の `FrontWallRef`/`TieRodPlacement`/`AnchorAlignment`/`CrossMemberValidator` 系テストは、`HeadPoint` から `LocalToWorld` で同じ Z_tip 相当値を逆算するようヘルパーを書き換え、全テストが従来と同じ期待値で green であることを確認した(669 → **671 ケース**)。
 
-**`SPQW_FRONTWALL_Create` / `_Action` の傾斜角プロンプトを廃止(直杭のみ)**(`FrontWallCommands.cs` のみ)
+**控え杭の杭上端標高デフォルトを前壁と同じ値に変更**(`AnchorPileCommands.cs` のみ)
+
+- 杭上端標高 Z_head の既定値を、控え杭自身の全長・傾斜角から式で逆算する方式(控え杭の全長が前壁と異なる場合にずれていた)から、**前壁の杭上端標高をそのまま使う**方式に変更した。控え杭は前壁と異なる全長で計画されることが多く、両者の頭は同じ施工基面に揃える想定のため。
+- Z_head 入力後の内部 Z_tip への変換は控え杭自身の全長・傾斜角のままで変更していない(控え杭は前壁と異なり傾斜角プロンプトを維持しているため)。
+
+**前壁の傾斜角プロンプトを廃止(直杭のみ)**(`FrontWallCommands.cs` のみ)
 
 - 傾斜角 θ のプロンプトを廃止し、常に `0.0`(直杭)を書き込むようにした。`FrontWallRecord.InclDeg` フィールド自体は残しているが、`_Action` で既存の傾斜杭図面を再生成すると直杭(θ=0)に変わる点に注意。
 - 傾斜角が常に 0 になったことに伴い、杭上端標高 Z_head → 杭先端標高 Z_tip の変換を `Z_head − L·cosθ`(三角関数)から `Z_head − L`(単純な数値計算)に簡略化した。
 - `SPQW_FRONTWALL_ImportCsv`(帳票 CSV 取り込み)は変更していない。`incl_deg` 列を指定すれば引き続き傾斜杭を取り込める(対話コマンドと CSV 取り込みで挙動が食い違う状態)。
-- 施設全長を外径 D より先に入力する順序は既に対応済み(2026-07-29 の前回変更のまま、変更なし)。
-- Core 層の変更は無い(テストは 669 ケースのまま)。
 
 **既定値の変更とタイロッド組数の自動算定、取付点反力プロンプトの廃止**(`FrontWallCommands.cs` / `TieRodCommands.cs`、新規 Core `TieRodPitch.CountFor`)
 
-- `SPQW_FRONTWALL_Create` の施設全長の既定値を 10.000m → **100.000m** に変更した。
-- `SPQW_TIEROD_Create` の取付間隔(矢板何本ごと)の既定値を 3 → **1**(全本数に配置)に変更した。
+- `SPQW_FRONTWALL_Create` の施設全長の既定値を 10.000m → 100.000m に変更した。
+- `SPQW_TIEROD_Create` の取付間隔(矢板何本ごと)の既定値を 3 → 1(全本数に配置)に変更した。
 - **タイロッド組数の入力を廃止**し、前壁の総本数(`PieceCount`)と取付間隔(何本ごと)から自動算定するようにした。新設 `TieRodPitch.CountFor(pieceCount, everyNPiles) = (pieceCount-1)/everyNPiles + 1`(1 本目に配置し以降 n 本ごとに配置した場合に全本数を覆うのに必要な組数)。例: 12 本の壁を 3 本ごとなら 4 組(1・4・7・10 本目)。
-- **取付点反力 Ap のプロンプトを廃止**した(2026-07-29 の 8 項目削減と同じ方針。`TieRodParameters.AnchorReaction` フィールドと張力照査の計算式は変更していない)。`_Create` では既定値 0.0(張力照査なし)のまま、`_Action` は前回保存値を使う。
-- 杭上端標高 Z_head の既定値は前壁の Z_tip 既定値(−18.0m)・全長既定値(20.0m)・傾斜角既定値(0°)から `−18.0 + 20.0×cos(0°) = 2.000m` と計算され、**変更なしで既に 2.000m**(依頼のとおり)。
-- Core 層のテストは新規 `TieRodPitch.CountFor` の T1301 を追加し 668 → **669 ケース**。
+- **取付点反力 Ap のプロンプトを廃止**した(下記の 8 項目削減と同じ方針。`TieRodParameters.AnchorReaction` フィールドと張力照査の計算式は変更していない)。`_Create` では既定値 0.0(張力照査なし)のまま、`_Action` は前回保存値を使う。
+- 新規テスト T1301(`TieRodPitch.CountFor`)を追加。668 → 669 ケース。
 
-**`SPQW_ANCHORPILE_Create` の入力を大幅削減: タイロッド選択で軸心標高・配置間隔・本数を自動設定、位置 Y は壁の 1 本目に自動整列**(`AnchorPileCommands.cs` / `DrawingHelper.cs` のみ、`AnchorInput` のフィールドは変更なし)
+**`SPQW_ANCHORPILE_Create` の入力を大幅削減: タイロッド選択で軸心標高・配置間隔・本数を自動設定、位置 Y は壁の 1 本目に自動整列**(`AnchorPileCommands.cs` / `DrawingHelper.cs`)
 
-- `SPQW_ANCHORPILE_Create` は前壁選択に加え、**代表となるタイロッドの選択**を新たに求めるようにした。選択したタイロッドの XData から `TieElevation`(軸心標高)・`TieSpacing`(配置間隔)・`TieCount`(本数)を読み取り、そのまま使う。従来は前壁の有効幅と「矢板何本ごと」の手入力から配置間隔を再計算し、本数・タイロッド軸心標高も個別に手入力していたため、タイロッドの実際の配置と食い違う余地があった。新設した `DrawingHelper.SelectTieRod`(`SelectFrontWall` と同じパターン)でタイロッド Solid3d を選択する。
-- **タイロッド軸心標高 Z_tr のプロンプトを廃止**。整列計算(`AnchorAlignment`)は引き続き Z_tr を必要とするため `AnchorInput.TieElevM` フィールド自体は残し、`_Create` は選択したタイロッドの値を自動代入、`_Action` は前回保存値(XData)をそのまま使う(`TieRodCommands` の 8 項目削減と同じ方針)。
+- 前壁選択に加え、**代表となるタイロッドの選択**を新たに求めるようにした。選択したタイロッドの XData から `TieElevation`(軸心標高)・`TieSpacing`(配置間隔)・`TieCount`(本数)を読み取り、そのまま使う。従来は前壁の有効幅と「矢板何本ごと」の手入力から配置間隔を再計算し、本数・タイロッド軸心標高も個別に手入力していたため、タイロッドの実際の配置と食い違う余地があった。新設した `DrawingHelper.SelectTieRod`(`SelectFrontWall` と同じパターン)でタイロッド Solid3d を選択する。
+- **タイロッド軸心標高 Z_tr のプロンプトを廃止**。整列計算(`AnchorAlignment`)は引き続き Z_tr を必要とするため `AnchorInput.TieElevM` フィールド自体は残し、`_Create` は選択したタイロッドの値を自動代入、`_Action` は前回保存値(XData)をそのまま使う。
 - **位置 Y の始点を「図面内の全前壁のうち杭中心 Y が最小のもの(壁の 1 本目)」に自動整列**するようにした。従来は選択した前壁ソリッド自身の Y をそのまま使っており、壁の途中の矢板を選択すると控え杭の並びが 1 本目からずれる余地があった。新設した `DrawingHelper.MinFrontWallY` がモデル空間内の `SPQW_FRONTWALL` XData を持つ全 Solid3d を走査して最小 Y を返す(該当が無ければ選択した前壁自身の Y にフォールバック)。この関数のために `BlockTableRecord` の列挙を stub(`stubs/AutoCadStubs.cs`)に追加した。
-- **杭先端標高 Z_tip ではなく杭上端(杭頭)標高 Z_head を入力**するように変更した。前壁(§5.1)と同じ方式で、全長 L・傾斜角 θ から内部で `Z_tip = Z_head − L·cosθ` に変換して従来どおり格納する。
-- 配置間隔・本数の手入力(`everyNPiles`/`pileCount`)に伴う定数(`DefaultEveryNPiles`/`DefaultPileCount`/`MaxPileCount`)は不要になったため削除した。
+- **杭先端標高 Z_tip ではなく杭上端(杭頭)標高 Z_head を入力**するように変更した(この後さらに §10 冒頭の内部構造変更でデフォルト算出方法も変わっている)。
+- 配置間隔・本数の手入力に伴う定数は不要になったため削除した。
+
+**`SPQW_TIEROD_Create` / `_Action` のプロンプトを 8 項目削減**(`TieRodCommands.cs`、計算式は変更なし)
+
+- 鋼種・設計基準・荷重状態・腹起し溝形鋼高さ・定着プレート厚・定着ワッシャー厚・ナット高さ・調節長の 8 プロンプトを廃止した。いずれも全長算出式(積算基準 3-4.5-(13))・張力照査の計算根拠であり、単純に削除すると積算数量そのものが崩れるため、**入力だけ廃止し `TieRodParameters` のプロパティと計算式(`TieRodCalculator.Compute`)はそのまま残した**。`_Create` は既定値(HT690・部分係数法・常時、腹起し高さ0.300m、プレート厚0.025m、ワッシャー厚0.006m)を固定で使い、`_Action` は選択したタイロッドの XData 保存値をそのまま使う。ナット高さ・調節長は従来どおり `ApplyStandardNutHeight()` が積算基準表(φ38〜φ65)から自動設定する。
+- 未使用になった `ParseEnum<T>` ヘルパーを削除した。
 - Core 層の変更は無い(テスト 668 ケースのまま)。
 
-**`SPQW_TIEROD_Create` / `_Action` のプロンプトを 8 項目削減**(`TieRodCommands.cs` のみ、計算式は変更なし)
+**`SPQW_FRONTWALL_Create` / `_Action` の入力変更: 杭上端標高を入力、施設全長を外径より先に**(`FrontWallCommands.cs`、内部表現は変更なし)
 
-- 鋼種・設計基準・荷重状態・腹起し溝形鋼高さ・定着プレート厚・定着ワッシャー厚・ナット高さ・調節長の 8 プロンプトを廃止した。いずれも全長算出式(積算基準 3-4.5-(13))・張力照査の計算根拠であり、単純に削除すると積算数量そのものが崩れるため、**入力だけ廃止し `TieRodParameters` のプロパティと計算式(`TieRodCalculator.Compute`)はそのまま残した**(ユーザー確認済み)。`_Create` は既定値(HT690・部分係数法・常時、腹起し高さ0.300m、プレート厚0.025m、ワッシャー厚0.006m)を固定で使い、`_Action` は選択したタイロッドの XData 保存値をそのまま使う。ナット高さ・調節長は従来どおり `ApplyStandardNutHeight()` が積算基準表(φ38〜φ65)から自動設定する。
-- 未使用になった `ParseEnum<T>` ヘルパーを削除した。
-- Core 層の変更は無い(テスト 668 ケースのまま)。帳票 CSV 取り込み(`TieRodCsvImporter`)の対応列は今回変更していない(引き続き 8 列とも必須)。
-
-**`SPQW_FRONTWALL_Create` / `_Action` の入力変更: 杭上端標高を入力、施設全長を外径より先に**(`FrontWallCommands.cs` のみ、内部表現は変更なし)
-
-- 標高入力を杭先端標高 Z_tip から**杭上端(杭頭)標高 Z_head** に変更した。現場では杭頭側の標高(施工基面・仮設との取り合い)の方が把握しやすいため。内部の XData・タイロッド/控え杭の整列計算(`PileGeometry.AxisXAt` 等)は Z_tip を前提に組まれているため、内部表現・XData キー(`tip_z`)は変更せず、入力された Z_head を全長 L・傾斜角 θ から `Z_tip = Z_head − L·cosθ` で変換してから格納する(`PromptColorAndTip`)。既定値は逆変換 `PileGeometry.HeadElevation` で表示する。
-- `SPQW_FRONTWALL_Create` の壁一括生成で、**施設全長の入力を外径 D より前**に移動した(`PromptWallRecord`)。全体の規模(施設全長)を先に決めてから 1 本あたりの諸元(外径等)を詰める、という入力の流れに合わせた。有効幅 B の既定値計算は外径・継手形式に依存するため、その入力(`PromptSpec`)より後という順序自体は変えていない。
-- Core 層の変更は無い(`PileGeometry.HeadElevation` は既存の表示用関数を逆変換に再利用しただけ)。テスト件数への影響なし(668 ケースのまま)。
+- 標高入力を杭先端標高 Z_tip から杭上端(杭頭)標高 Z_head に変更した(当初は内部表現は Z_tip のまま変換していたが、その後 §10 冒頭の変更で内部構造自体も Z_head 基準になった)。
+- `SPQW_FRONTWALL_Create` の壁一括生成で、施設全長の入力を外径 D より前に移動した(全体の規模を先に決めてから 1 本あたりの諸元を詰める流れに合わせた)。
 
 **バグ修正: カスタム有効幅 B を使うとタイロッド・控え杭・施設積算が実際の矢板間隔とズレる不整合**(`FrontWallRef.EffectiveWidthM` 新設)
 
-- `SPQW_FRONTWALL_Create` の壁一括生成は有効幅 B の入力値を優先できる(算出値と食い違えば警告のみで続行)が、実際に使われた値は XData に保存されておらず、`SPQW_TIEROD_Create` / `SPQW_ANCHORPILE_Create` / `SPQW_QUAYWALL_Estimate` はいずれも前壁の外径・継手形式から有効幅を**再計算**していた。カスタム B を使った場合、この再計算値は実際の矢板間隔と一致せず、しかも `CrossMemberValidator.ValidatePilePitch` はタイロッド側の値も同じ再計算ロジックで自動代入されるため常に一致してしまい、ズレを検出できていなかった(実際にシミュレーションし、2組目以降のタイロッドが矢板の中心から外れることを確認)。
+- `SPQW_FRONTWALL_Create` の壁一括生成は有効幅 B の入力値を優先できる(算出値と食い違えば警告のみで続行)が、実際に使われた値は XData に保存されておらず、`SPQW_TIEROD_Create` / `SPQW_ANCHORPILE_Create` / `SPQW_QUAYWALL_Estimate` はいずれも前壁の外径・継手形式から有効幅を**再計算**していた。カスタム B を使った場合、この再計算値は実際の矢板間隔と一致せず、しかも `CrossMemberValidator.ValidatePilePitch` はタイロッド側の値も同じ再計算ロジックで自動代入されるため常に一致してしまい、ズレを検出できていなかった。
 - `FrontWallRef` / `QuayWallComposition` に `EffectiveWidthM` を追加し、`ResolveEffectiveWidth()` で「設定されていれば実測値、未設定(0以下)なら従来どおり算出値」にフォールバックする設計とした。既存コード・既存テストへの後方互換を保っている。
 - `FrontWallRecord`(XData)に `effective_width` キーを追加。壁一括生成時に確定した有効幅を記録し、`ToRef()` で `FrontWallRef` へ伝播する。旧図面(キーが無い)は自動的にフォールバックする。
 - `TieRodCommands` / `AnchorPileCommands` / `QuayWallCommands` の再計算箇所を `ResolveEffectiveWidth()` 経由に置き換えた。
-- 新規 `FrontWallRefTests`(T1298〜T1300)、`CrossMemberValidatorTests` に T999・T1000、`QuayWallEstimateTests` に T1025 を追加。テスト 662 → **668 ケース**。
+- テスト 662 → 668 ケース。
 
 **開発環境トラブルの再発防止**(`scripts/update-project.bat` 新設 + `fix-restore.bat` 強化。コード変更なし)
 
 - `git clone`/`pull` が使えない実機環境で ZIP を都度ダウンロードする運用のため、展開のたびに新しいフォルダが増え、NU1105(プロジェクト情報が見つかりません)が繰り返し発生していた。`update-project.bat` を新設し、ZIP をドラッグ&ドロップするだけで固定フォルダへの上書き展開・キャッシュ削除・ビルドまで自動化することで、フォルダ増殖自体を止める根本対策とした。
-- `fix-restore.bat` は `dotnet restore` のみで Core の実ビルドを行っていなかったため CS0006(メタデータファイルが見つかりません)が繰り返し発生していた。`dotnet build` のステップを追加した。あわせて `-p:Platform=x64` を手動ビルドコマンドに含めると `Core.csproj`(`<Platforms>` 未指定)の出力先が Visual Studio の期待しない場所になり CS0006 を悪化させることが実機で判明したため、READMEにも明記した。
+- `fix-restore.bat` は `dotnet restore` のみで Core の実ビルドを行っていなかったため CS0006(メタデータファイルが見つかりません)が繰り返し発生していた。`dotnet build` のステップを追加した。あわせて `-p:Platform=x64` を手動ビルドコマンドに含めると `Core.csproj`(`<Platforms>` 未指定)の出力先が Visual Studio の期待しない場所になり CS0006 を悪化させることが実機で判明したため、README にも明記した。
 - 前壁の継手にのみ存在した `Region.CreateFromCurves` のクラッシュ要因(§9.4)について、タイロッド・控え杭の3Dソリッド生成コードを点検した。タイロッドは `CreateFrustum` 直接生成、控え杭は単純な円・円板からの生成のみで、どちらも DXF 由来の頂点列(`JointShapes`)を扱わないため同種の問題は無いことを確認した。
 
 **実機バグ修正: `SPQW_FRONTWALL_Create` が継手断面の生成で `eInvalidInput` クラッシュする不具合**(新規 Core `FrontWall.PolygonCleanup`)
 
-- 2026-07-29、実機(AutoCAD 2025)で `SPQW_FRONTWALL_Create` を実行すると、既定の継手形式 LT75 で `Region.CreateFromCurves` が `eInvalidInput` を返しクラッシュすることが判明。原因は `JointShapes`(007 の DXF 抽出データ)に含まれる極端に短い辺(LT65/75/100 共通の `LoopsB` で実測 最小 0.0023mm)で、AutoCAD がこれを無効な形状として拒否していた。
+- 実機(AutoCAD 2025)で `SPQW_FRONTWALL_Create` を実行すると、既定の継手形式 LT75 で `Region.CreateFromCurves` が `eInvalidInput` を返しクラッシュすることが判明。原因は `JointShapes`(007 の DXF 抽出データ)に含まれる極端に短い辺(LT65/75/100 共通の `LoopsB` で実測 最小 0.0023mm)で、AutoCAD がこれを無効な形状として拒否していた。
 - `JointShapes.cs` は手編集禁止(決定3、再生成で失われる)のため、押し出しソリッド生成の直前(`SolidBuilder.JointMember`)で縮退辺を除去する前処理 `PolygonCleanup.RemoveDegenerateVertices` を追加した。閾値 0.01mm は、実測した縮退辺(最大0.0023mm)と意匠上の最小辺(LT65/75/100 の `LoopsB` で0.177mm)の中間に設定。
-- **副産物**: 前回(2026-07-29 の別セッション)「PP/PT の `LoopsA` は自己交差しており多角形交差判定の対象外」と判断していたが、この自己交差は縮退辺(ゼロ長辺)による誤検出であり、縮退辺除去後は解消することを確認した(`JointFit` を PP/PT の噛み合わせ評価に使えない、という判断自体は変わらない。噛み合わせ構造そのものが LT型と異なるため)。
-- `PolygonCleanupTests`(T1287〜T1292)で、全 `JointType` の実データに対しクリーニング後に縮退辺・自己交差が残らないことを回帰テストとして固定した。
-- テスト 640 → 651 ケース。
+- **副産物**: 前回(別セッション)「PP/PT の `LoopsA` は自己交差しており多角形交差判定の対象外」と判断していたが、この自己交差は縮退辺(ゼロ長辺)による誤検出であり、縮退辺除去後は解消することを確認した(`JointFit` を PP/PT の噛み合わせ評価に使えない、という判断自体は変わらない。噛み合わせ構造そのものが LT型と異なるため)。
+- `PolygonCleanupTests`(T1287〜T1292)で、全 `JointType` の実データに対しクリーニング後に縮退辺・自己交差が残らないことを回帰テストとして固定した。テスト 640 → 651 ケース。
 - **同日、対処後も実機で同じ `eInvalidInput` が再発**。原因は別種の不正形状で、隣接3点が完全に同一直線上にあり進行方向が反転する極薄のノッチ(LT65/75/100 共通の `LoopsB` で実測。ある点から35.7mm進んだ直後、次の点でわずか0.177mm逆方向に戻る)。縮退辺(距離ゼロ)ではないため `RemoveDegenerateVertices` では捕捉できず、垂線距離による共線判定 `PolygonCleanup.RemoveNearCollinearVertices` を追加で実装し、`SolidBuilder.JointMember` で縮退辺除去の後段に適用するようにした。
-- `PolygonCleanupTests` に T1293〜T1297 を追加し、実機で見つかった座標を直接再現するケース(T1293)と、縮退辺・共線点除去を両方適用した後の全 `JointType` 実データでの回帰確認(T1296・T1297)を加えた。
-- テスト 651 → **662 ケース**。
+- `PolygonCleanupTests` に T1293〜T1297 を追加し、実機で見つかった座標を直接再現するケース(T1293)と、縮退辺・共線点除去を両方適用した後の全 `JointType` 実データでの回帰確認(T1296・T1297)を加えた。テスト 651 → 662 ケース。
 
 **継手 3D モデルとカタログ有効幅の幾何整合性を検証**(新規 Core `FrontWall.JointFit`。コード変更ではなく検証)
 
@@ -1276,43 +1281,8 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 
 **タイロッド・控え杭のピッチを鋼管矢板幅から自動決定**(新規 Core `TieRod.TieRodPitch` + `AnchorInput.PositionY`)
 
-- **案A: 矢板径・矢板ピッチの入力を廃止**。`SPQW_TIEROD_Create` / `_Action` は前壁の外径・有効幅 B を自動代入し、取得値を画面表示するだけにした。`CrossMemberValidator` が前壁と 1mm 精度で照合するため、従来は「Enter 以外の入力が全て検証エラー」というプロンプトになっていた。プロンプト数 18 → 16。
-- **案B: 取付間隔を「矢板何本ごと」の整数入力に変更**。従来は m 入力で、既定値 2.400m が B=0.8752m の整数倍でないため Enter で必ず検証エラーになり、利用者が B×n を手計算する必要があった(T1273 で旧既定値がエラーになることを確認)。新設の `TieRodPitch.SpacingFor` で導出するため、整数倍制約が構造的に満たされる(T1271)。
-- **案C: 控え杭を複数本の一括生成に変更**。`AnchorInput.PositionY` を新設し、`AnchorAlignment.Compute` が前壁の Y を流用する旧実装を改めた。`SPQW_ANCHORPILE_Create` は「矢板何本ごと」+ 本数から自動配置する。**これにより §9.2 の 7(一括生成で全数が同一座標に重なる)が解消**した。XData に `pos_y` キー、CSV に `pos_y`/`Y`/`位置y` 列を追加。
-- **旧図面互換**: `pos_y` を持たない図面は `AnchorPileRecord.HasPositionY` が false になり、`_Action` が前壁の Y へ整列させて従来どおりの挙動を保つ(その旨を表示)。
-- `TieRodParameters.cs` / `TieRodCalculator.cs` には触れていない。両ファイルは `scripts/port-from-legacy.sh` が 008@ff3a986 と完全同期させる対象のため、新規ファイル `TieRod/TieRodPitch.cs` に実装した(`FrontWall.DriveEquipment` と同じ回避パターン)。同ファイルが複写している取付間隔の範囲が本体と乖離した場合は T1275 が検出する。
-- テスト 613 → **626 ケース**(`TieRodPitchTests` 7 + `AnchorAlignmentTests` 2 + `AnchorPileImportTests` 4 追加)。`AnchorAlignmentTests` の Y 検証と `AnchorPileImportTests` の CSV は仕様変更に合わせて更新した。
+- **案A: 矢板径・矢板ピッチの入力を廃止**。`SPQW_TIEROD_Create` / `_Action` は前壁の外径・有効幅 B を自動代入し、取得値を画面表示するだけにした。`CrossMemberValidator` が前壁と 1mm 精度で照合するため、従来は「Enter 以外の入力が全て検証エラー」というプロンプトになっていた。
+- **案B: 取付間隔を「矢板何本ごと」の整数入力から算出**。新設 `TieRodPitch` が「何本ごと」と前壁の有効幅 B から取付間隔 [m] を導出し、ピッチの整数倍制約を構造的に満たす。
+- **案C: 控え杭を複数本の一括生成に変更**。`AnchorInput.PositionY` を新設し、`AnchorAlignment.Compute` が前壁の Y を流用する旧実装を改めた。`SPQW_ANCHORPILE_Create` は「矢板何本ごと」+ 本数から自動配置する(この後さらに §10 冒頭の変更でタイロッド選択方式に変わっている)。XData に `pos_y` キー、CSV に `pos_y`/`Y`/`位置y` 列を追加。
 
-**`SPQW_FRONTWALL_Create` を壁一括生成に変更**(新規 Core `FrontWall.WallLayout` + コマンド書き換え)
-
-- 従来は 1 回の実行で**矢板 1 本**を生成し、「総本数」は継手判定用の値でしかなかった(10 本の壁には 10 回実行が必要)。本版では**施設全長**と**鋼管矢板 有効幅 B(継手考慮)**を入力すると必要本数を自動算出し、始点から +Y 方向へ壁全体を一括生成する。施工順位は 1 始まりで自動採番するため、継手の要否・雌雄は従来どおり `PieceAssignment` が自動判定する。
-- 端数処理は**切り上げ**。施設全長を必ずカバーする代わりに終点が行き過ぎる(10.000m ÷ 0.8752m = 11.426 → 12 本 = 10.502m、+0.502m 超過)。ちょうど整数倍のときに浮動小数誤差で 1 本増えないよう、誤差許容 1mm を差し引いてから割っている(T1260)。
-- 有効幅は入力値を優先し、外径・継手形式からの算出値と 1mm を超えて食い違う場合は**警告を出して続行**する。エラー停止にしなかったのは実形状継手と異なる幅で割り付ける運用を許すため。ただしその状態では `SPQW_TIEROD_Create` のピッチ照合が通らなくなる旨を警告文に明記した。
-- 本数計算は Core の `FrontWall/WallLayout.cs` に置き、AutoCAD 非依存で検証できるようにした(`WallLayoutTests` 10 ケース。切り上げの浮動小数境界・上限 500 本・`PieceAssignment` との連結を含む)。
-- **`_Action` は変更していない**。1 本の再生成という役割・プロンプト入力順とも従来どおりで、総本数・施工順位を明示入力する。共通の諸元プロンプトは `PromptSpec` / `PromptColorAndTip` へ切り出して `_Create` と共有した。
-- **`_Create` では 1 本だけの生成ができなくなった**。1 本ずつ諸元を変えるなら `_ImportCsv`、既存の 1 本を直すなら `_Action` を使う(§9.2 の 4)。
-
-**サンプル CSV とドキュメントの追加**(コード変更なし)
-
-- [`docs/samples/`](docs/samples/) に帳票 CSV 5 種 + 柱状図 CSV を追加(§5.5 の表)。各インポータを直接呼び出してエラー 0 件を確認済みで、前壁 → タイロッド → 控え杭を通しで使える組合せにしてある。
-- §4.10「CSV を Dynamo から使う」を新設。ノードが直接読める CSV は柱状図 CSV だけであること、帳票 CSV は Dynamo 標準ノード経由になることを明記した。
-- §9.2 の 7 を実装に合わせて訂正。旧記述は「タイロッド・控え杭とも Y が必須列」としていたが、**控え杭には Y 列が存在せず、一括生成すると全行が同一座標に重なる**(`AnchorInput` に Y フィールドが無い)。サンプル作成時に実際に動かして判明した。対処方針は未決。
-- NETLOAD / Import Library による登録手順を §7 に追加。
-
-本版は次の 2 つの機能追加と、それらへの批判的レビュー(別セッション)での指摘反映を含む。
-
-**(1) 打撃工法の杭打機・杭打船選定(新規 Core `FrontWall.DriveEquipment` + コマンド拡張)**
-
-- 基準原文 3-4.5-14〜15/3-4.6-12〜13「作業船・機械の選定」を確認した結果、振動工法(バイブロ単独)には実装済みだった主船選定が打撃工法には無いことが判明したため追加した。ハンマ規格から陸上打設の「クローラ式杭打機」(3ランク: 4〜4.5t / 6.5〜8t / 10〜12.5t。**ハンマ15.0tは陸上打設の表に行が無く表外**)+条件該当時の「クローラクレーン(固定50t吊)」、海上打設の「杭打船」(H-65/H-125/H-150)を選定する。台船・揚錨船・潜水士船は既存 `VibroEstimate` の該当メンバーを再利用(原文注記により16節3-2と同一表であることを確認済み)。ランク対応はセル結合位置からの読み取りで信頼度**推定**(§9.1 の 7)。
-- **引船は「現場条件による追加船団」**(3-4.5-15 注1「杭打船の移動が必要な場合は、引船を計上する」)のため、無条件計上とせず `needTugBoat` の問いで分離した(レビュー指摘の反映)。
-- `DriveEstimate.cs` / `DriveEstimateTests.cs` には触れていない。両ファイルは `scripts/port-from-legacy.sh` が 007@b12b188 と完全同期させる対象であり(実行後 `git diff` が空であることを直接確認済み)、直接メソッドを追加すると再実行時に消える。控え杭側の `AnchorPile.AnchorDriveEstimate` と同じ回避パターンとして新規ファイルに実装した。ハンマ規格ラベルの転記が 007 側の変更で乖離するリスクは、`GetHammerClass` の実戻り値を通す連結テスト(T1259)で検出する。
-- `SPQW_FRONTWALL_Estimate` に `needCrawlerCrane`(陸上)/`needTugBoat`・`needDiverVessel`(海上)のプロンプトと「作業船・機械」出力ブロック、および他の Estimate 系コマンドには既にあった Q≦0 ガードを追加。`SPQW_ANCHORPILE_Estimate` に `needCrawlerCrane` を追加。潜水士船等のプロンプト文言は既存 2 コマンドの形式(「[計上しない(N)/計上する(Y)]」)に統一した。
-
-**(2) 打設歩掛積算 4 系統の Dynamo ノード化(§4.5〜4.8)**
-
-- 新規ノード 4 個: `CalcFrontWallDriveEstimate` / `CalcVibroEstimate` / `CalcVibroJetEstimate` / `CalcAnchorPileDriveEstimate`。§9.2 の「打設歩掛の Dynamo ノードは未実装」を解消。対応する AutoCAD コマンドの対話フロー・出力を移植し、コマンドが選択済み XData から読む値(外径・肉厚・全長・傾斜角等)は明示引数に置き換えた。コマンドの「エラーメッセージを表示して中断」箇所は `ArgumentException` に置き換えている(`CalcWeightedN` と同じ規約)。
-- D/t/L 等の寸法は範囲チェックを行わない(AutoCAD の Estimate 系コマンドが検証済み XData を信頼して再検証しないのと同じモデル)。ただし `jetCount` はコマンドのプロンプト範囲(1〜4)と同じ制約を例外で課す — 範囲外を黙って通すとジェット用発電機・水中ポンプが空欄のまま積算が出るため。
-- 4 ノードの計算は既存 Core メソッドの組合せであり、Core の式・表は既存テストで検証済み。ノード自体の妥当性はスクラッチ検証(Core 層を直接呼び出す再現コード)で主要な組合せの出力を手計算・既存テスト値(例: `GetSb(800,20)=1.09`)と突き合わせて確認した。
-- レビュー指摘の反映: `CalcVibroJetEstimate` で受け取るだけで未使用だった `nozzleCount` を出力へエコーする形に修正(ジェット使用台数も同様)。出力キー「合計質量」の単位・母数を統一(前壁打撃=全本数 t、バイブロ単独は「1本当り合計質量 [t]」へ改名)。`CalcAnchorPileDriveEstimate` にコマンドが表示する単位重量 W を追加。
-
-**数値の更新**: テスト 585 → **603 ケース**(DriveEquipmentTests の 18 ケース追加)、Dynamo ノード 3 → **7 個**、Core に `FrontWall/DriveEquipment.cs` を新規追加。コマンド数は 19 個で変更なし。
+以降さらに古い機能追加履歴(帳票 CSV 取り込み・付帯船舶・控え杭打設歩掛・柱状図解析ノード・Dynamo 節全面改訂の経緯)は git log と [`docs/implementation-plan.md`](docs/implementation-plan.md) の変更履歴を参照。

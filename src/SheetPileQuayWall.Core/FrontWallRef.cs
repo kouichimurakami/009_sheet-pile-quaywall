@@ -7,16 +7,24 @@
 // フェーズ 3 で追加した。
 //
 // 単位: 長さ m、角度 deg。
+//
+// 内部表現は杭上端(杭頭)標高 Z_head 基準(2026-07-29、決定: 鋼管矢板モデルの
+// 内部構造を Z_head 基準へ変更)。TipPoint(杭先端)は HeadPoint・LengthM・InclDeg
+// から都度算出する計算プロパティであり、ソリッド生成など杭先端を挿入点として
+// 必要とする箇所のためだけに残している。
 
 namespace SheetPileQuayWall.Core
 {
     public sealed class FrontWallRef
     {
-        public Point3 TipPoint;                        // 杭先端 (挿入点) [m]
+        public Point3 HeadPoint;                       // 杭上端(杭頭) [m]
         public double OuterDm;                         // 外径 D_f [m]
         public double InclDeg;                         // 傾斜角 θ_f [deg]
         public double LengthM;                         // 全長 L_f [m]
         public FrontWall.JointType JointType;          // 継手形式 (既定 LT65)
+
+        // 杭先端(挿入点)。HeadPoint からの計算値(PileGeometry.TipFromHead の逆演算)。
+        public Point3 TipPoint => PileGeometry.TipFromHead(HeadPoint, LengthM, InclDeg);
 
         // 壁一括生成(WallLayout)で実際に配置に使われた有効幅 B [m]。
         // 0 以下(未設定)の場合は ResolveEffectiveWidth が外径・継手形式からの

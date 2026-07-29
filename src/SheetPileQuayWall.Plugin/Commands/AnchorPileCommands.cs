@@ -58,14 +58,15 @@ namespace SheetPileQuayWall.Plugin.Commands
             record.FrontHandle = frontHandle;
             record.HasPositionY = true;
             // 杭先端標高の既定値は前壁に合わせる(移植元 006 と同じ)
-            record.Input.TipElevM = front.TipPoint.Z;
+            record.Input.TipElevM = SheetPileQuayWall.Core.PileGeometry.TipFromHead(
+                front.HeadPoint, front.LengthM, front.InclDeg).Z;
             record.Input.TieElevM = tieRod.Parameters.TieElevation;
 
             // 始点は図面内の前壁のうち杭中心 Y が最小のもの(壁の 1 本目)に自動整列する
             // (2026-07-29。従来は選択した前壁自身の Y をそのまま使っており、壁の途中の
             // 矢板を選ぶと控え杭の並びが 1 本目からずれていた)
             double? minFrontY = SheetPileQuayWall.Plugin.DrawingHelper.MinFrontWallY(db);
-            record.Input.PositionY = minFrontY ?? front.TipPoint.Y;
+            record.Input.PositionY = minFrontY ?? front.HeadPoint.Y;
 
             ed.WriteMessage(
                 $"\n  タイロッドから取得: 軸心標高 Z_tr {record.Input.TieElevM:F3} m / " +
@@ -154,10 +155,10 @@ namespace SheetPileQuayWall.Plugin.Commands
             // pos_y を持たない旧図面は、従来の挙動どおり前壁の Y へ整列させる
             if (!stored.HasPositionY)
             {
-                stored.Input.PositionY = front.TipPoint.Y;
+                stored.Input.PositionY = front.HeadPoint.Y;
                 stored.HasPositionY = true;
                 ed.WriteMessage(
-                    $"\n  位置 Y が保存されていないため、前壁の Y = {front.TipPoint.Y:F4} m " +
+                    $"\n  位置 Y が保存されていないため、前壁の Y = {front.HeadPoint.Y:F4} m " +
                     "へ整列します(旧版で作成した図面)。");
             }
 
@@ -312,10 +313,10 @@ namespace SheetPileQuayWall.Plugin.Commands
 
             // 杭先端標高 Z_tip ではなく杭上端(杭頭)標高 Z_head を数値入力させる。
             // 既定値は控え杭自身の全長・傾斜角から式で逆算するのではなく、前壁の
-            // 杭上端標高をそのまま使う(前壁 InclDeg=0 のため Z_tip + L の単純計算。
-            // 2026-07-29、控え杭は前壁と同じ施工基面から打設される想定のため)。
-            // 入力後の Z_head → Z_tip 変換は控え杭自身の全長・傾斜角を使う(従来どおり)。
-            double headElevDefault_m = front.TipPoint.Z + front.LengthM;
+            // 杭上端標高(前壁の内部表現そのもの)をそのまま使う(控え杭は前壁と同じ
+            // 施工基面から打設される想定のため。2026-07-29)。入力後の Z_head → Z_tip
+            // 変換は控え杭自身の全長・傾斜角を使う(従来どおり)。
+            double headElevDefault_m = front.HeadPoint.Z;
 
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
                 ed, $"\n杭上端標高 Z_head (m, D.L. 基準) <{headElevDefault_m:F3}>: ",
