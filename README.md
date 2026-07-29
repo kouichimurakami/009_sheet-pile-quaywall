@@ -3,7 +3,7 @@
 **鋼管矢板式岸壁**(前壁鋼管矢板 + タイロッド + 控え杭)を、単一の DLL で完結してパラメトリック 3D モデル生成・積算(施工歩掛計算)できる AutoCAD 2025 / Civil 3D 2025 プラグイン。
 
 - ターゲット: C# / .NET 8.0、`net8.0-windows`、x64、AutoCAD 2025 .NET / Civil 3D 2025 / Dynamo 3.3(Zero Touch Node)
-- 構成: **Core(AutoCAD 非依存の計算層)/ Plugin(AutoCAD 依存層)** の 2 プロジェクト分割。Core は BCL のみを参照し、WSL / Linux でもテストできる(**xUnit 651 ケース green**)
+- 構成: **Core(AutoCAD 非依存の計算層)/ Plugin(AutoCAD 依存層)** の 2 プロジェクト分割。Core は BCL のみを参照し、WSL / Linux でもテストできる(**xUnit 662 ケース green**)
 - `006_steel-pipe-pile` / `007_steel-pipe-sheet-pile` / `008_tairod` の後継・統合版であり、**009 単独でビルド・実行できる**(3 リポジトリへのプロジェクト参照・アセンブリ参照は持たない)
 
 > **使用前に §9「注意点・既知の課題」を必ず読むこと。**実機動作は未検証であり、積算基準の一部に OCR から復元できなかった表がある。
@@ -997,7 +997,7 @@ CSV の行順は問わない(標高上端の降順に自動で並べ替えたう
 Core 層は AutoCAD 非依存のため WSL / Linux でもビルド・テストできる。Plugin 層は AutoCAD が必要で、無い環境ではスタブで構文検証まで行う。
 
 ```bash
-# Core + テスト(AutoCAD 不要。651 件が green であること)
+# Core + テスト(AutoCAD 不要。662 件が green であること)
 dotnet test tests/SheetPileQuayWall.Core.Tests -c Release
 
 # Plugin の構文検証(AutoCAD 不要。スタブとリンクする。配布不可)
@@ -1070,7 +1070,7 @@ AutoCAD コマンド(NETLOAD)と Dynamo ノード(Import Library)は独立した
 │       │                                 打設歩掛積算 4 系統。すべて AutoCAD 非依存の純計算)
 │       └── DrawingHelper.cs / Prompt.cs / SolidBuilder.cs
 ├── stubs/                               AutoCAD API スタブ(構文検証専用。配布禁止)
-├── tests/SheetPileQuayWall.Core.Tests/  xUnit 651 ケース + fixtures/
+├── tests/SheetPileQuayWall.Core.Tests/  xUnit 662 ケース + fixtures/
 ├── scripts/
 │   ├── port-from-legacy.sh              007/008 からの冪等移植
 │   └── verify-dll-versions.ps1          参照 DLL バージョン実測(CLAUDE.PRIVATE.md §9)
@@ -1163,7 +1163,7 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 
 - **007 の継手質量にバグがある**。`JointCatalog.JointMassPerM` は P-P 形で鋼管を 1 本分(34.7 kg/m)しか数えないが、`JointShapes` の実形状は両側とも φ165.2×9 の鋼管であり、正しくは 69.4 kg/m(約 50% の過小評価)。009 では `JointMass`(側別質量)を新設して積算に使っており、移植元のファイルは変更していない(`port-from-legacy.sh` の再実行で失われるため)。**007 側の修正は別途必要。**
 - **008 の `TieRodParameters.SpanLength` の XML コメントが誤っている**。「控工中心まで」とあるが、008 の README 図・算定式・006 の定義はいずれも「前壁矢板中心〜陸側定着面」を指す。009 では正しい定義でコメント・プロンプトを記述している。
-- **007 の `JointShapes`(継手断面、DXF 抽出データ)に極端に短い辺(実測 最小 0.0023mm)が含まれる**。`SPQW_FRONTWALL_Create` を実機で実行すると `Region.CreateFromCurves` が `eInvalidInput` で失敗する形で顕在化した(2026-07-29)。抽出時の丸め誤差とみられる(本来同一点であるべき座標が僅かにずれて2点として記録されている)。`JointShapes.cs` は手編集禁止のため、`FrontWall.PolygonCleanup.RemoveDegenerateVertices` で押し出し直前に縮退辺を除去する対処とした(`SolidBuilder.JointMember`)。副次的に、PP/PT の `LoopsA` で検出されていた自己交差(§6.1 の脚注参照)も、この縮退辺による交差判定の誤検出だったことが判明し、除去後は解消した。**007 側の DXF 再抽出は別途検討が必要。**
+- **007 の `JointShapes`(継手断面、DXF 抽出データ)に極端に短い辺・極薄のノッチが含まれる**。`SPQW_FRONTWALL_Create` を実機で実行すると `Region.CreateFromCurves` が `eInvalidInput` で失敗する形で顕在化した(2026-07-29、2回)。抽出時の丸め誤差とみられる問題が2種類見つかっている。(1) 極端に短い辺(実測 最小 0.0023mm。本来同一点であるべき座標が僅かにずれて2点として記録されている)。(2) 縮退はしていないが隣接3点が完全に同一直線上にあり進行方向が反転する極薄のノッチ(LT65/75/100 共通の `LoopsB` で実測。ある点から35.7mm進んだ直後、次の点でわずか0.177mm逆方向に戻る)。1点目の対処だけでは2点目のノッチが残って再クラッシュしたため、2種類とも別処理として実装した。`JointShapes.cs` は手編集禁止のため、`FrontWall.PolygonCleanup.RemoveDegenerateVertices`(縮退辺)→`RemoveNearCollinearVertices`(共線点)の順で押し出し直前に除去する対処とした(`SolidBuilder.JointMember`)。副次的に、PP/PT の `LoopsA` で検出されていた自己交差(§6.1 の脚注参照)も、縮退辺による交差判定の誤検出だったことが判明し、除去後は解消した。**007 側の DXF 再抽出は別途検討が必要。**
 
 ### 9.5 実機動作確認
 
@@ -1181,7 +1181,10 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 - `JointShapes.cs` は手編集禁止(決定3、再生成で失われる)のため、押し出しソリッド生成の直前(`SolidBuilder.JointMember`)で縮退辺を除去する前処理 `PolygonCleanup.RemoveDegenerateVertices` を追加した。閾値 0.01mm は、実測した縮退辺(最大0.0023mm)と意匠上の最小辺(LT65/75/100 の `LoopsB` で0.177mm)の中間に設定。
 - **副産物**: 前回(2026-07-29 の別セッション)「PP/PT の `LoopsA` は自己交差しており多角形交差判定の対象外」と判断していたが、この自己交差は縮退辺(ゼロ長辺)による誤検出であり、縮退辺除去後は解消することを確認した(`JointFit` を PP/PT の噛み合わせ評価に使えない、という判断自体は変わらない。噛み合わせ構造そのものが LT型と異なるため)。
 - `PolygonCleanupTests`(T1287〜T1292)で、全 `JointType` の実データに対しクリーニング後に縮退辺・自己交差が残らないことを回帰テストとして固定した。
-- テスト 640 → **651 ケース**。
+- テスト 640 → 651 ケース。
+- **同日、対処後も実機で同じ `eInvalidInput` が再発**。原因は別種の不正形状で、隣接3点が完全に同一直線上にあり進行方向が反転する極薄のノッチ(LT65/75/100 共通の `LoopsB` で実測。ある点から35.7mm進んだ直後、次の点でわずか0.177mm逆方向に戻る)。縮退辺(距離ゼロ)ではないため `RemoveDegenerateVertices` では捕捉できず、垂線距離による共線判定 `PolygonCleanup.RemoveNearCollinearVertices` を追加で実装し、`SolidBuilder.JointMember` で縮退辺除去の後段に適用するようにした。
+- `PolygonCleanupTests` に T1293〜T1297 を追加し、実機で見つかった座標を直接再現するケース(T1293)と、縮退辺・共線点除去を両方適用した後の全 `JointType` 実データでの回帰確認(T1296・T1297)を加えた。
+- テスト 651 → **662 ケース**。
 
 **継手 3D モデルとカタログ有効幅の幾何整合性を検証**(新規 Core `FrontWall.JointFit`。コード変更ではなく検証)
 

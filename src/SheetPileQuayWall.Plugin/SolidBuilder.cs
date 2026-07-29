@@ -101,12 +101,14 @@ namespace SheetPileQuayWall.Plugin
             for (int i = 0; i < loops.Length; i++)
             {
                 // JointShapes(007 の DXF 抽出データ)には抽出時の丸め誤差による
-                // 極端に短い辺(実測 最小 0.0023mm)が含まれ、そのまま Region 化すると
-                // AutoCAD が eInvalidInput を返す(2026-07-29 実機で確認)。押し出し前に
-                // 縮退辺を除去する。
+                // 極端に短い辺(実測 最小 0.0023mm)や、進行方向が反転する極薄のノッチ
+                // (縮退はしていないが隣接3点がほぼ同一直線上にある)が含まれ、
+                // そのまま Region 化すると AutoCAD が eInvalidInput を返す
+                // (2026-07-29 実機で確認)。押し出し前にどちらも除去する。
                 double[] cleaned =
-                    SheetPileQuayWall.Core.FrontWall.PolygonCleanup.RemoveDegenerateVertices(
-                        loops[i]);
+                    SheetPileQuayWall.Core.FrontWall.PolygonCleanup.RemoveNearCollinearVertices(
+                        SheetPileQuayWall.Core.FrontWall.PolygonCleanup.RemoveDegenerateVertices(
+                            loops[i]));
 
                 Autodesk.AutoCAD.DatabaseServices.Solid3d prism = Prism(
                     SheetPileQuayWall.Core.FrontWall.JointPlacement.TransformLoop(
