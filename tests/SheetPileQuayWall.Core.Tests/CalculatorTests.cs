@@ -61,6 +61,19 @@ namespace SheetPileQuayWall.Core.Tests
         }
 
         [Xunit.Fact]
+        public void クラス既定値のTieElevationはHwl既定値プラス05メートルと一致する()
+        {
+            // Hwl・TieElevation の既定値は「軸心標高 = H.W.L. + 0.5 m」の設計意図で
+            // 対にして決めている(2026-07-30 に 2.0/2.5 → 1.0/1.5 へ変更)。
+            // 片方だけ変更すると設計意図が崩れるため、この対応関係を固定する。
+            SheetPileQuayWall.Core.TieRod.TieRodParameters p =
+                new SheetPileQuayWall.Core.TieRod.TieRodParameters();
+            Xunit.Assert.Equal(
+                SheetPileQuayWall.Core.TieRod.TieRodParameters.DefaultTieElevation(p.Hwl),
+                p.TieElevation, LengthTolerance);
+        }
+
+        [Xunit.Fact]
         public void 組数分のY座標が取付間隔で並ぶ()
         {
             SheetPileQuayWall.Core.TieRod.TieRodParameters p = Sample();

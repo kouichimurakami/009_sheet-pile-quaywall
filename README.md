@@ -9,7 +9,7 @@
 
 - 対象構造物: 前壁鋼管矢板(直杭)+ タイロッド + 控え杭(傾斜可)
 - 環境: C# / .NET 8.0(`net8.0-windows`、x64)/ AutoCAD 2025 .NET / Civil 3D 2025 / Dynamo 3.3(Zero Touch Node)
-- 構成: **Core(AutoCAD 非依存の計算層)/ Plugin(AutoCAD 依存層)/ Dynamo(Zero Touch Node 層)** の 3 プロジェクト分割。Core は BCL のみ参照し、WSL / Linux でもテストできる(**xUnit 674 ケース green**)
+- 構成: **Core(AutoCAD 非依存の計算層)/ Plugin(AutoCAD 依存層)/ Dynamo(Zero Touch Node 層)** の 3 プロジェクト分割。Core は BCL のみ参照し、WSL / Linux でもテストできる(**xUnit 675 ケース green**)
 - `006_steel-pipe-pile` / `007_steel-pipe-sheet-pile` / `008_tairod` の後継・統合版。**009 単独でビルド・実行できる**(3 リポジトリへの参照は持たない)
 
 ---
@@ -767,7 +767,7 @@ Dynamo 自身のジオメトリカーネル(`Autodesk.DesignScript.Geometry` / `
 | `tieSpacing` | タイロッド取付間隔 | m | **`pilePitch × everyNPiles` で自動算出** | 派生量(ピッチの整数倍が構造的に保証される) |
 | `tieCount` | 組数 | 組 | **前壁の総本数と `everyNPiles` から自動算定(入力を求めない)** | `TieRodPitch.CountFor(pieceCount, everyNPiles)` = `(pieceCount-1)/everyNPiles + 1`(1 本目に配置し以降 n 本ごと) |
 | `hwl` | H.W.L. 標高 | m(D.L.) | 1.000 | 0.000〜5.000 |
-| `tieElevation` | タイロッド軸心標高 | m(D.L.) | `hwl` + 0.500 | −5.000〜10.000 |
+| `tieElevation` | タイロッド軸心標高 | m(D.L.) | 1.500(H.W.L. 既定値 + 0.5 m の固定値。`hwl` の入力値には追随しない) | −5.000〜10.000 |
 | `layerColor` | 色 | ACI | 8 | 1〜255 |
 | `positionY` | 1 組目の位置 Y | m | − | UCS ピック(**X は前壁から自動計算**。`_Action` では保存値を保持) |
 
@@ -863,7 +863,7 @@ Dynamo 自身のジオメトリカーネル(`Autodesk.DesignScript.Geometry` / `
 
 **サンプル CSV**([`docs/samples/`](docs/samples/))
 
-各インポータ(`FrontWallCsvImporter` / `TieRodCsvImporter` / `AnchorPileCsvImporter`)を直接呼び出してエラー 0 件を確認済み。前壁 → タイロッド → 控え杭を**通しで使える組合せ**にしてある(前壁 D=800mm・LT75 → 有効幅 B=875.2mm、杭頭標高 +3.0m > タイロッド軸心標高 Z_tr=2.5m)。
+各インポータ(`FrontWallCsvImporter` / `TieRodCsvImporter` / `AnchorPileCsvImporter`)を直接呼び出してエラー 0 件を確認済み。前壁 → タイロッド → 控え杭を**通しで使える組合せ**にしてある(前壁 D=800mm・LT75 → 有効幅 B=875.2mm、杭頭標高 +3.0m > タイロッド軸心標高 Z_tr=1.5m)。
 
 | ファイル | 用途 | 検証結果 |
 |---|---|---|
@@ -1036,7 +1036,7 @@ CSV の行順は問わない(標高上端の降順に自動で並べ替えたう
 **3 プロジェクト構成**(2026-07-29、Dynamo ノードを Plugin から分離): Core 層は AutoCAD 非依存のため WSL / Linux でもビルド・テストできる。Plugin 層(AutoCAD コマンド)は AutoCAD 本体 DLL が必要、Dynamo 層(Zero Touch Node)は `DynamoServices.dll` のみが必要で、いずれも無い環境ではスタブで構文検証まで行う。
 
 ```bash
-# Core + テスト(AutoCAD 不要。674 件が green であること)
+# Core + テスト(AutoCAD 不要。675 件が green であること)
 dotnet test tests/SheetPileQuayWall.Core.Tests -c Release
 
 # Plugin(AutoCAD コマンド)の構文検証(AutoCAD 不要。スタブとリンクする。配布不可)
@@ -1128,7 +1128,7 @@ AutoCAD コマンド(NETLOAD、`SheetPileQuayWall.Plugin.dll`)と Dynamo ノー�
 │                                         (控え杭・前壁本体円筒・タイロッドのソリッド生成。
 │                                         XData 無し)
 ├── stubs/                               AutoCAD/Dynamo API スタブ(構文検証専用。配布禁止)
-├── tests/SheetPileQuayWall.Core.Tests/  xUnit 674 ケース + fixtures/
+├── tests/SheetPileQuayWall.Core.Tests/  xUnit 675 ケース + fixtures/
 ├── scripts/
 │   ├── port-from-legacy.sh              007/008 からの冪等移植
 │   └── verify-dll-versions.ps1          参照 DLL バージョン実測(CLAUDE.PRIVATE.md §9)
@@ -1226,7 +1226,7 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 
 **未実施。**開発機に AutoCAD 2025 が無いため、Plugin 層はスタブによる構文・型検証までしか行えていない。実機での検証項目は `docs/implementation-plan.md` §13.5 を参照。参照 DLL バージョンも未検証(§2 の警告)。
 
-前壁の内部構造を Z_head 基準へ作り替える一連の変更(§10)は WSL 側のロジック検証(674 件のテスト、ヘルパー関数での逆算一致確認)のみで確認しており、実機での NETLOAD・図面生成・MOVE 追随・旧図面の自動変換は未検証。
+前壁の内部構造を Z_head 基準へ作り替える一連の変更(§10)は WSL 側のロジック検証(675 件のテスト、ヘルパー関数での逆算一致確認)のみで確認しており、実機での NETLOAD・図面生成・MOVE 追随・旧図面の自動変換は未検証。
 
 ---
 
@@ -1234,14 +1234,15 @@ Core の一部は 006/007/008 から移植したもので、`scripts/port-from-l
 
 **過去のすべての変更点は `git log` で追える。** 本節は現在の設計を理解するうえで背景を知っておく価値がある、アーキテクチャ上の主要な決定だけを新しい順に要約する(詳細な経緯・テスト件数の推移は `git log` と [`docs/implementation-plan.md`](docs/implementation-plan.md) の改訂履歴を参照)。
 
-1. **`SpqwGeometryNodes` を新設**(`ProtoGeometry.dll` 参照、実験的・未検証)。控え杭・前壁本体円筒・タイロッドの 3 ノード。Dynamo が焼き込んだジオメトリに XData を後付けする手段が無いため、`_Action` 相当には対応せず、パラメトリック性は Dynamo 自身のグラフ再実行に委ねる設計にした。
-2. **PP形継手の3Dモデル幾何整合性を検証**(`JointFit.PpPipeCenterDistance`)。2本の継手鋼管の中心間距離が外径に依らず一定(≈パイプ半径)であることを確認し回帰テスト化した。
-3. **Dynamo ノードを独立プロジェクト `SheetPileQuayWall.Dynamo` へ分離**。実機で `Dynamo.Exceptions.LibraryLoadFailedException` が発生し、原因は `<Private>False</Private>` 参照(AcCoreMgd 等)が `deps.json` に載らず Dynamo 側の依存解決が失敗すること。AutoCAD 参照を持たない別プロジェクトへ分離して解決した。**最初に試した `IsVisibleInDynamoLibrary(false)` の付与(型走査除外)は効果が無く、この対処で置き換えた**(型走査が原因という仮説自体は反証済み)。
-4. **前壁の内部表現を杭先端標高 Z_tip 基準から杭上端標高 Z_head 基準へ刷新**(`FrontWallRef.HeadPoint` が正の記録、XData キーも `head_x/_y/_z` に変更)。Z_tip は `PileGeometry.TipFromHead` による表示専用の計算値になった。旧図面(`tip_x/_y/_z` のみ)は読み込み時に自動変換する。
-5. **前壁の傾斜角パラメータを廃止**(直杭のみに簡略化。Z_head→Z_tip 変換も単純減算に)。**控え杭の杭上端標高の既定値を前壁と同じ値に変更**(控え杭自身の式による逆算をやめた)。
-6. **タイロッド組数を前壁総本数から自動算定**(`TieRodPitch.CountFor`)し、鋼種・設計基準・荷重状態・腹起し高さ・定着プレート/ワッシャー厚・ナット高さ・調節長・取付点反力の 9 項目のプロンプトを廃止(計算式・XData は維持、既定値固定または前回保存値を使用)。
-7. **控え杭の生成をタイロッド選択方式に変更**(軸心標高・配置間隔・本数を選択したタイロッドから自動設定)。位置 Y は図面内の全前壁のうち最小 Y(壁の 1 本目)に自動整列するようにした。
-8. **カスタム有効幅 B を使った際の部材間ズレを修正**(`FrontWallRef.EffectiveWidthM` 新設)。壁一括生成で確定した B を XData に保存し、タイロッド・控え杭・施設積算がすべて同じ値を参照するようにした。
-9. **継手 3D モデルの幾何整合性を検証**(`JointFit.Overlaps`/`MinClearance`)。LT65/75/100 は径によらず非干渉であることを確認。あわせて実機で発覚した `Region.CreateFromCurves` の `eInvalidInput` クラッシュ(DXF 抽出データの縮退辺・共線点が原因)を `PolygonCleanup` で解消した。
-10. **帳票 CSV 取り込み・柱状図解析ノード・打設歩掛積算(打撃/バイブロ単独/ジェット併用/控え杭)・付帯船舶・杭打機/杭打船選定を追加**。フェーズ 5 以降に順次拡張した主要機能群。
-11. **007/008 からの Core 移植・部材間整合チェック(`CrossMemberValidator`)の新設**(フェーズ 1〜3)。プロジェクト立ち上げ時の基礎工事にあたる部分。
+1. **別セッションの批判的レビュー指摘を反映**(`SpqwGeometryNodes` 中心に 8 件)。①タイロッドが全長の半分(+約5.3m)陸側にずれる配置バグを修正(`ExtrudeAsSolid` は片側押し出しなのに AutoCAD 版 `CreateFrustum`(原点中心)と同じ中点移動を使っていた。平行移動量を海側端 X に変更)、②控え杭ノードの検証を前壁用 `InputValidator`(K011)からテスト済みの `AnchorPileSteel`(JIS A 5525 スナップ + 径別肉厚)へ差し替え、AutoCAD コマンド・CSV 取り込みと同一経路化(3重の死にコードも削除)、③`Vector.ZAxis()` の Dispose 漏れ2箇所、④HWL 既定値変更の波及漏れ(Core 側 `AnchorPileImportRow` の 2.5、サンプル CSV 2 件の旧値、README の「`hwl`+0.500」表記)、⑤「TieElevation 既定値 = Hwl 既定値 + 0.5m」の対応関係を固定するテストを追加(674→675 ケース)。
+2. **`SpqwGeometryNodes` を新設**(`ProtoGeometry.dll` 参照、実験的・未検証)。控え杭・前壁本体円筒・タイロッドの 3 ノード。Dynamo が焼き込んだジオメトリに XData を後付けする手段が無いため、`_Action` 相当には対応せず、パラメトリック性は Dynamo 自身のグラフ再実行に委ねる設計にした。
+3. **PP形継手の3Dモデル幾何整合性を検証**(`JointFit.PpPipeCenterDistance`)。2本の継手鋼管の中心間距離が外径に依らず一定(≈パイプ半径)であることを確認し回帰テスト化した。
+4. **Dynamo ノードを独立プロジェクト `SheetPileQuayWall.Dynamo` へ分離**。実機で `Dynamo.Exceptions.LibraryLoadFailedException` が発生し、原因は `<Private>False</Private>` 参照(AcCoreMgd 等)が `deps.json` に載らず Dynamo 側の依存解決が失敗すること。AutoCAD 参照を持たない別プロジェクトへ分離して解決した。**最初に試した `IsVisibleInDynamoLibrary(false)` の付与(型走査除外)は効果が無く、この対処で置き換えた**(型走査が原因という仮説自体は反証済み)。
+5. **前壁の内部表現を杭先端標高 Z_tip 基準から杭上端標高 Z_head 基準へ刷新**(`FrontWallRef.HeadPoint` が正の記録、XData キーも `head_x/_y/_z` に変更)。Z_tip は `PileGeometry.TipFromHead` による表示専用の計算値になった。旧図面(`tip_x/_y/_z` のみ)は読み込み時に自動変換する。
+6. **前壁の傾斜角パラメータを廃止**(直杭のみに簡略化。Z_head→Z_tip 変換も単純減算に)。**控え杭の杭上端標高の既定値を前壁と同じ値に変更**(控え杭自身の式による逆算をやめた)。
+7. **タイロッド組数を前壁総本数から自動算定**(`TieRodPitch.CountFor`)し、鋼種・設計基準・荷重状態・腹起し高さ・定着プレート/ワッシャー厚・ナット高さ・調節長・取付点反力の 9 項目のプロンプトを廃止(計算式・XData は維持、既定値固定または前回保存値を使用)。
+8. **控え杭の生成をタイロッド選択方式に変更**(軸心標高・配置間隔・本数を選択したタイロッドから自動設定)。位置 Y は図面内の全前壁のうち最小 Y(壁の 1 本目)に自動整列するようにした。
+9. **カスタム有効幅 B を使った際の部材間ズレを修正**(`FrontWallRef.EffectiveWidthM` 新設)。壁一括生成で確定した B を XData に保存し、タイロッド・控え杭・施設積算がすべて同じ値を参照するようにした。
+10. **継手 3D モデルの幾何整合性を検証**(`JointFit.Overlaps`/`MinClearance`)。LT65/75/100 は径によらず非干渉であることを確認。あわせて実機で発覚した `Region.CreateFromCurves` の `eInvalidInput` クラッシュ(DXF 抽出データの縮退辺・共線点が原因)を `PolygonCleanup` で解消した。
+11. **帳票 CSV 取り込み・柱状図解析ノード・打設歩掛積算(打撃/バイブロ単独/ジェット併用/控え杭)・付帯船舶・杭打機/杭打船選定を追加**。フェーズ 5 以降に順次拡張した主要機能群。
+12. **007/008 からの Core 移植・部材間整合チェック(`CrossMemberValidator`)の新設**(フェーズ 1〜3)。プロジェクト立ち上げ時の基礎工事にあたる部分。

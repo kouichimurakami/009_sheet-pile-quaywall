@@ -48,24 +48,27 @@ namespace SheetPileQuayWall.Dynamo
             double inclDeg = 0.0,
             bool closedTip = false)
         {
-            double D_m = D_mm / 1000.0;
+            // 外径・肉厚・全長は控え杭の規則(JIS A 5525 標準径スナップ + K011 径別肉厚、
+            // AnchorPileSteel)で検証する。前壁用の InputValidator(K011 一律)とは範囲が
+            // 異なるため使わない(SPQW_ANCHORPILE_Create・CSV 取り込みと同じ経路)。
+            double D_m = SheetPileQuayWall.Core.AnchorPile.AnchorPileSteel.SnapToJis(
+                D_mm / 1000.0);
             double t_m = t_mm / 1000.0;
 
-            ValidateDTL(D_m, t_m, L_m);
-
-            string? errL = SheetPileQuayWall.Core.FrontWall.InputValidator.ValidateL(L_m);
+            string? errD = SheetPileQuayWall.Core.AnchorPile.AnchorPileSteel.ValidateD(D_m);
+            if (errD != null)
+            {
+                throw new System.ArgumentException(errD, nameof(D_mm));
+            }
+            string? errT = SheetPileQuayWall.Core.AnchorPile.AnchorPileSteel.ValidateT(t_m, D_m);
+            if (errT != null)
+            {
+                throw new System.ArgumentException(errT, nameof(t_mm));
+            }
+            string? errL = SheetPileQuayWall.Core.AnchorPile.AnchorPileSteel.ValidateL(L_m);
             if (errL != null)
             {
                 throw new System.ArgumentException(errL, nameof(L_m));
-            }
-            if (L_m < SheetPileQuayWall.Core.AnchorPile.AnchorPileSteel.L_Min_m ||
-                L_m > SheetPileQuayWall.Core.AnchorPile.AnchorPileSteel.L_Max_m)
-            {
-                throw new System.ArgumentException(
-                    $"控え杭 全長 L={L_m:F1}m は範囲外 " +
-                    $"({SheetPileQuayWall.Core.AnchorPile.AnchorPileSteel.L_Min_m:F0}〜" +
-                    $"{SheetPileQuayWall.Core.AnchorPile.AnchorPileSteel.L_Max_m:F0}m)。",
-                    nameof(L_m));
             }
             if (inclDeg < SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.Incl_Min_Deg ||
                 inclDeg > SheetPileQuayWall.Core.FrontWall.FrontWallPlacement.Incl_Max_Deg)
@@ -88,15 +91,18 @@ namespace SheetPileQuayWall.Dynamo
                 // (AnchorPileCommands.BuildSolid と同じ配置規約)
                 Autodesk.DesignScript.Geometry.Point plateOrigin =
                     Autodesk.DesignScript.Geometry.Point.ByCoordinates(0.0, 0.0, -t_m);
+                Autodesk.DesignScript.Geometry.Vector plateAxis =
+                    Autodesk.DesignScript.Geometry.Vector.ZAxis();
                 Autodesk.DesignScript.Geometry.Circle plateCircle =
                     Autodesk.DesignScript.Geometry.Circle.ByCenterPointRadiusNormal(
-                        plateOrigin, outerR_m, Autodesk.DesignScript.Geometry.Vector.ZAxis());
+                        plateOrigin, outerR_m, plateAxis);
                 Autodesk.DesignScript.Geometry.Solid plate = plateCircle.ExtrudeAsSolid(t_m);
 
                 Autodesk.DesignScript.Geometry.Solid united =
                     (Autodesk.DesignScript.Geometry.Solid)pile.Union(plate);
                 pile.Dispose();
                 plateOrigin.Dispose();
+                plateAxis.Dispose();
                 plateCircle.Dispose();
                 plate.Dispose();
                 pile = united;
@@ -136,22 +142,24 @@ namespace SheetPileQuayWall.Dynamo
             return PlaceAtTip(pile, 0.0, tipCore);
         }
 
+        // 前壁専用(InputValidator は K011 一律の前壁規則。控え杭は AnchorPileSteel を使う)。
+        // ArgumentException の ParamName はノードの引数名(D_mm/t_mm/L_m)に合わせる。
         private static void ValidateDTL(double D_m, double t_m, double L_m)
         {
             string? errD = SheetPileQuayWall.Core.FrontWall.InputValidator.ValidateD(D_m);
             if (errD != null)
             {
-                throw new System.ArgumentException(errD, nameof(D_m));
+                throw new System.ArgumentException(errD, "D_mm");
             }
             string? errT = SheetPileQuayWall.Core.FrontWall.InputValidator.ValidateT(t_m, D_m);
             if (errT != null)
             {
-                throw new System.ArgumentException(errT, nameof(t_m));
+                throw new System.ArgumentException(errT, "t_mm");
             }
             string? errL = SheetPileQuayWall.Core.FrontWall.InputValidator.ValidateL(L_m);
             if (errL != null)
             {
-                throw new System.ArgumentException(errL, nameof(L_m));
+                throw new System.ArgumentException(errL, "L_m");
             }
         }
 
@@ -248,28 +256,33 @@ namespace SheetPileQuayWall.Dynamo
                 SheetPileQuayWall.Core.TieRod.TieRodCalculator.Compute(p);
 
             double radius_m = r.NominalDiameter / 2.0;
-            double midX = baseX_m + (r.SeaEndX + r.LandEndX) / 2.0;
+            double seaX = baseX_m + r.SeaEndX;
 
             Autodesk.DesignScript.Geometry.Solid[] rods =
                 new Autodesk.DesignScript.Geometry.Solid[r.RodPositionsY.Count];
             for (int i = 0; i < r.RodPositionsY.Count; i++)
             {
                 double rodY = positionY_m + r.RodPositionsY[i];
-                rods[i] = PlaceTieRod(radius_m, r.TotalLength, midX, rodY, r.AxisZ);
+                rods[i] = PlaceTieRod(radius_m, r.TotalLength, seaX, rodY, r.AxisZ);
             }
             return rods;
         }
 
-        // ローカルで Z 軸沿いの円柱を生成し、Y 軸まわり 90° 回転して X 軸沿いへ倒してから
-        // (x_m, y_m, z_m) へ平行移動する。TieRodCommands.BuildSolid と同じ変換順序。
+        // ローカルで Z 軸沿いの円柱(Z=0〜+L)を生成し、Y 軸まわり +90° 回転で
+        // X 軸沿い(X=0〜+L)へ倒してから (x_m, y_m, z_m) へ平行移動する。
+        // ローカル原点 = 海側端のため、x_m には海側端 X(baseX + SeaEndX)を渡すこと。
+        // AutoCAD 版 TieRodCommands.BuildSolid は CreateFrustum が原点中心(−L/2〜+L/2)の
+        // 円柱を作るため中点 midX へ移動するが、こちらは片側押し出しなので原点の規約が異なる。
         private static Autodesk.DesignScript.Geometry.Solid PlaceTieRod(
             double radius_m, double length_m, double x_m, double y_m, double z_m)
         {
             Autodesk.DesignScript.Geometry.Point origin =
                 Autodesk.DesignScript.Geometry.Point.ByCoordinates(0.0, 0.0, 0.0);
+            Autodesk.DesignScript.Geometry.Vector zAxis =
+                Autodesk.DesignScript.Geometry.Vector.ZAxis();
             Autodesk.DesignScript.Geometry.Circle circle =
                 Autodesk.DesignScript.Geometry.Circle.ByCenterPointRadiusNormal(
-                    origin, radius_m, Autodesk.DesignScript.Geometry.Vector.ZAxis());
+                    origin, radius_m, zAxis);
             Autodesk.DesignScript.Geometry.Solid local = circle.ExtrudeAsSolid(length_m);
 
             Autodesk.DesignScript.Geometry.Point rotOrigin =
@@ -283,6 +296,7 @@ namespace SheetPileQuayWall.Dynamo
                 (Autodesk.DesignScript.Geometry.Solid)rotated.Translate(x_m, y_m, z_m);
 
             origin.Dispose();
+            zAxis.Dispose();
             circle.Dispose();
             local.Dispose();
             rotOrigin.Dispose();
