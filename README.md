@@ -9,7 +9,7 @@
 | 対象構造物 | 前壁鋼管矢板(直杭)+ タイロッド + 控え杭(傾斜可) |
 | 環境 | C# / .NET 8.0(`net8.0-windows`、x64)/ AutoCAD 2025 .NET / Civil 3D 2025 / Dynamo 3.3 |
 | 構成 | Core(計算層)/ Plugin(AutoCAD 層)/ Dynamo(Zero Touch Node 層)の 3 プロジェクト |
-| 規模 | AutoCAD コマンド **19** / Dynamo ノード **10** / Core テスト **678 件 green** |
+| 規模 | AutoCAD コマンド **19** / Dynamo ノード **11** / Core テスト **684 件 green** |
 | 由来 | `006_steel-pipe-pile` / `007_steel-pipe-sheet-pile` / `008_tairod` の後継・統合版。**009 単独でビルド・実行できる** |
 
 関連ドキュメント:
@@ -29,7 +29,7 @@
 | [1. 概略図](#1-概略図) | データフロー・断面図・座標系 |
 | [2. 参照アセンブリ](#2-参照アセンブリ) | DLL 一覧・プロジェクト依存関係 |
 | [3. AutoCAD / Civil 3D コマンド](#3-autocad--civil-3d-コマンド) | 19 コマンド・ワークフロー・打設工法の選択・XData |
-| [4. Dynamo ノード](#4-dynamo-ノード) | 10 ノード・入力 3 経路・グラフ配線 |
+| [4. Dynamo ノード](#4-dynamo-ノード) | 11 ノード・入力 3 経路・グラフ配線 |
 | [5. 入力パラメータ](#5-入力パラメータ) | 部材別の入力表・CSV / JSON 形式 |
 | [6. 計算値(自動算出)](#6-計算値自動算出) | 派生量と信頼度ラベル |
 | [7. ビルド方法](#7-ビルド方法) | ビルド・登録・トラブルシュート |
@@ -58,7 +58,7 @@
    (積算ソフト出力)        │    │                    │   └──────────────────────┘
                           │    │ AutoCAD 非依存      │   ┌──────────────────────┐
  ③ 設計計算書 JSON         │    │ BCL のみ参照        │──▶│ 諸元・数量・歩掛      │
-   arise_design_input ────┤    │ 678 テスト green    │   │ (コマンドライン出力)  │
+   arise_design_input ────┤    │ 684 テスト green    │   │ (コマンドライン出力)  │
    (Dynamo 標準ノード)     │    └────────────────────┘   └──────────────────────┘
                           │                              ┌──────────────────────┐
  ④ 柱状図 CSV             ─┘                          ──▶│ Geometry(Dynamo 焼込)│
@@ -99,15 +99,17 @@
       +Y(施設延長方向)
        ↑
        │  前壁鋼管矢板(ピッチ = 有効幅 B、継手で連結)
-       │   ●
-       │   ●━━━━━━━━━━━━━━━━━━━○ ← タイロッド + 控え杭
-       │   ●                        (取付間隔 = B の整数倍。
-       │   ●━━━━━━━━━━━━━━━━━━━○    矢板中央を横断する)
-       │   ●
+       │   ●━━━━━━━━━━━━━━━━━━━○ ← 最終 P 本目(必ず設置)
+       │   ●                        ┐ 端数スパン(r 本ぶん。r = (P−1) mod n)
+       │   ●━━━━━━━━━━━━━━━━━━━○ ┘ ← タイロッド + 控え杭
+       │   ●                        (取付間隔 = B × n。矢板中央を横断する)
+       │   ●━━━━━━━━━━━━━━━━━━━○ ← 1 本目(必ず設置)
        └──────────────────────────→ +X(陸側)
               ←────── span ─────→
 
    施工順位 1 本目から +Y 方向へ打設。継手は −Y 側(先行矢板と嵌合)/ +Y 側(後続を受ける)
+   タイロッド・控え杭は 1 本目と最終 P 本目に必ず設置し、その間を n 本ごとに割り付ける。
+   (P−1) が n で割り切れない場合、最終スパンのみ r 本ぶんと短くなる(端数吸収)。
 ```
 
 ### 1.4 座標系
@@ -141,7 +143,7 @@
               ┌───────────────────────────────────┐
               │  SheetPileQuayWall.Core           │  参照: BCL のみ
               │  計算層(AutoCAD 非依存)           │  → WSL / Linux でテスト可
-              │  678 テスト green                  │
+              │  684 テスト green                  │
               └──────┬──────────────────┬─────────┘
                      │                  │
         ┌────────────▼───────┐   ┌──────▼──────────────────────┐
@@ -153,7 +155,7 @@
         └────────┬───────────┘   └──────┬──────────────────────┘
                  │                      │
             NETLOAD で登録         Import Library で登録
-            SPQW_* 19 コマンド     SpqwNodes / SpqwGeometryNodes 10 ノード
+            SPQW_* 19 コマンド     SpqwNodes / SpqwGeometryNodes 11 ノード
 ```
 
 ### 2.2 参照 DLL
@@ -200,7 +202,7 @@
 
 | コマンド | 説明 |
 |---|---|
-| `SPQW_TIEROD_Create` | **前壁は自動選択**(図面内で杭中心 Y が最小の矢板 = 壁の 1 本目)→ 組数分の Solid3d 生成。矢板径・ピッチ・海側取付 X は前壁から自動代入 |
+| `SPQW_TIEROD_Create` | **前壁は自動選択**(図面内で杭中心 Y が最小の矢板 = 壁の 1 本目)→ 組数分の Solid3d 生成。矢板径・ピッチ・海側取付 X は前壁から自動代入。**位置 Y はピックせず**、1 組目 = 壁の 1 本目、最終組 = 最終矢板に固定 |
 | `SPQW_TIEROD_Action` | 選択 1 本を前壁の現在位置に基づき再生成(Y は保存値を保持) |
 | `SPQW_TIEROD_Query` | 諸元・張力照査・受杭数量を出力 |
 | `SPQW_TIEROD_Color` | 色番号のみ変更 |
@@ -210,7 +212,7 @@
 
 | コマンド | 説明 |
 |---|---|
-| `SPQW_ANCHORPILE_Create` | **タイロッド・前壁とも自動選択**(位置 Y が最小のタイロッド → その参照先の前壁)→ 配置間隔・本数・軸心標高を自動設定して一括生成 |
+| `SPQW_ANCHORPILE_Create` | **タイロッド・前壁とも自動選択**(位置 Y が最小のタイロッド → その参照先の前壁)→ 軸心標高を自動設定し、**図面上の全タイロッドの Y に 1 本ずつ**一括生成 |
 | `SPQW_ANCHORPILE_Action` | 前壁基準の整列位置に再生成(MOVE していても整列位置へ戻る) |
 | `SPQW_ANCHORPILE_Query` | 諸元・整列座標・杭面間浄距離・積算数量を出力 |
 | `SPQW_ANCHORPILE_Estimate` | **打撃工法**の打設歩掛積算(4節 3-4.6、**陸上打設のみ**) |
@@ -237,15 +239,16 @@
                 ▼
  ② SPQW_TIEROD_Create
       「矢板何本ごと」の整数入力のみ。取付間隔 = B × n、組数は総本数から自動算定
+      1 本目と最終矢板に必ず配置し、間を n 本ごと(端数は最終スパンで吸収)
       XData: tie_spacing, tie_count, tie_elev, front_handle, pos_y …
                 │
-                │ ▼自動選択: 位置 Y が最小のタイロッド(1 組目)
-                │   └─ 間隔・本数・軸心標高を自動代入
+                │ ▼自動選択: 位置 Y が最小のタイロッド(1 組目)→ 軸心標高を自動代入
+                │ ▼全タイロッドの pos_y を収集 → 控え杭の配置位置(1 対 1)
                 │ ▼自動解決: 前壁 = そのタイロッドの front_handle の参照先
                 ▼
  ③ SPQW_ANCHORPILE_Create
       天端 = タイ材中心 + 0.5 m(既定値。変更可)
-      位置 Y は図面内の全前壁のうち最小 Y(壁の 1 本目)に自動整列
+      位置 Y は図面内の全タイロッドの Y にそのまま整列(本数もタイロッドと同数)
       XData: span, tie_elev, tip_elev, front_handle, pos_y …
                 │
                 ▼
@@ -370,9 +373,10 @@ Civil 3D 2025 同梱の Dynamo 3.3 で使う Zero Touch Node。**`SheetPileQuayW
 | `CalcVibroEstimate` | 前壁・バイブロ単独の打設歩掛(16節 3-2) | 13 | 26 |
 | `CalcVibroJetEstimate` | 前壁・ジェット併用の打設歩掛(16節 3-1) | 26 | 36 |
 | `CalcAnchorPileDriveEstimate` | 控え杭・打撃工法の打設歩掛(4節 3-4.6) | 10 | 18 |
+| `CalcTiePlacement` | タイロッド・控え杭の配置 Y オフセット・組数・端数スパン | 3 | 6 |
 | `CreateAnchorPileSolid` | 控え杭ソリッド(本管 + 閉端時は底板、傾斜角対応) | 6 | 1 |
 | `CreateFrontWallPileSolid` | 前壁本体円筒(θ=0 固定、継手なし) | 4 | 1 |
-| `CreateTieRodSolid` | タイロッド(組数ぶんの配列を返す) | 10 | N |
+| `CreateTieRodSolid` | タイロッド(組数ぶんの配列を返す。組数は `pieceCount` / `everyNPiles` から自動算定) | 10 | N |
 
 ### 4.3 `CalcSection` — 前壁の断面性能
 
@@ -505,7 +509,9 @@ Dynamo 自身のジオメトリカーネル(`ProtoGeometry.dll`)でソリッド�
 |---|---|---|
 | `CreateAnchorPileSolid` | `headPoint`, `D_mm`, `t_mm`, `L_m`, `inclDeg`, `closedTip` | − / 800.0 / 12.0 / 20.0 / 0.0 / false |
 | `CreateFrontWallPileSolid` | `headPoint`, `D_mm`, `t_mm`, `L_m` | − / 800.0 / 12.0 / 20.0 |
-| `CreateTieRodSolid` | `baseX_m`, `positionY_m`, `rodDiameter_m`, `spanLength_m`, `pileDiameter_m`, `pilePitch_m`, `tieSpacing_m`, `tieCount`, `hwl_m`, `tieElevation_m` | 0.0 / 0.0 / 0.048 / 10.000 / 1.000 / 1.200 / 2.400 / 1 / 1.000 / 1.500 |
+| `CreateTieRodSolid` | `baseX_m`, `positionY_m`, `rodDiameter_m`, `spanLength_m`, `pileDiameter_m`, `pilePitch_m`, `pieceCount`, `everyNPiles`, `hwl_m`, `tieElevation_m` | 0.0 / 0.0 / 0.048 / 10.000 / 1.000 / 1.200 / 10 / 1 / 1.000 / 1.500 |
+
+`positionY_m` には**壁の 1 本目の矢板中心 Y** を渡す。組数・各組の Y は `pieceCount` と `everyNPiles` から自動算定され、1 本目と最終 `pieceCount` 本目に必ず配置される(2026-08-01。旧引数 `tieSpacing_m` / `tieCount` は廃止した**破壊的変更**)。
 
 **AutoCAD コマンド版との違い:**
 
@@ -598,7 +604,8 @@ python3 scripts/build-design-input.py --check docs/samples/arise_design_input.js
 | `anchor_head_z` | `anchor_pile.tip_z + anchor_pile.length` | +2.0 m |
 | `span_009` | `definition=="center"` なら `center_to_center + anchor_pile.outer_d / 2`、`"land_face"` ならそのまま | 20.0 m |
 | `pile_count` | `ceil(site.wall_length / front_wall.pile_pitch)` | 85 本 |
-| `tie_count` | `floor(site.wall_length / tie_rod.tie_spacing)` | 42 組 |
+| `every_n` | `round(tie_rod.tie_spacing / front_wall.pile_pitch)`(計算書の m 値 → 「矢板何本ごと」) | 2 本ごと |
+| `tie_count` | `(pile_count−1) / every_n` の切り上げ + 1(両端固定。2026-08-01) | 43 組 |
 
 **検証の分担** — スクリプトが検査するのは**ノード側で検査できない項目だけ**である。径・肉厚・全長の範囲、取付間隔が矢板ピッチの整数倍であること等は各ノードが Core の `Validate()` で検査する。
 
@@ -627,9 +634,14 @@ python3 scripts/build-design-input.py --check docs/samples/arise_design_input.js
                        t_mm ◀ front_wall.wall_t  × 1000
                        L_m  ◀ derived.front_wall_length
 
-控え杭: [Sequence] start ◀ site.origin_y / amount ◀ derived.tie_count / step ◀ tie_rod.tie_spacing
-         └──▶ [Point.ByCoordinates]
+配置:  [SpqwNodes.CalcTiePlacement]
+          pieceCount ◀ derived.pile_count   everyNPiles ◀ derived.every_n
+          pilePitch_m ◀ front_wall.pile_pitch
+          └──▶「配置 Y オフセット [m]」(1 本目と最終矢板を必ず含む)
+
+控え杭: [Point.ByCoordinates]
                 x ◀ site.origin_x + derived.span_009 − anchor_pile.outer_d ÷ 2
+                y ◀ site.origin_y + 「配置 Y オフセット [m]」  ← Sequence は使わない
                 z ◀ derived.anchor_head_z
                 └──▶ [CreateAnchorPileSolid]
                        D_mm ◀ anchor_pile.outer_d × 1000 / t_mm ◀ anchor_pile.wall_t × 1000
@@ -639,9 +651,11 @@ python3 scripts/build-design-input.py --check docs/samples/arise_design_input.js
               baseX_m ◀ site.origin_x        positionY_m ◀ site.origin_y
               rodDiameter_m ◀ tie_rod.rod_d  spanLength_m ◀ derived.span_009
               pileDiameter_m ◀ front_wall.outer_d   pilePitch_m ◀ front_wall.pile_pitch
-              tieSpacing_m ◀ tie_rod.tie_spacing    tieCount ◀ derived.tie_count
+              pieceCount ◀ derived.pile_count       everyNPiles ◀ derived.every_n
               hwl_m ◀ tie_rod.hwl                   tieElevation_m ◀ tie_rod.tie_elev
 ```
+
+- **控え杭の Y に `Sequence` を使わない**(2026-08-01)。両端固定の割付では最終スパンだけ間隔が変わるため、等間隔列では再現できない。`CalcTiePlacement` の「配置 Y オフセット」をそのまま使えばタイロッドと 1 対 1 で一致する
 
 - **単位に注意**。JSON は全て m だが、`CreateFrontWallPileSolid` / `CreateAnchorPileSolid` の `D_mm` / `t_mm` は mm 呼称ポートのため **×1000 が必要**。`CreateTieRodSolid` は全ポートが m
 - 控え杭の X は `AnchorAlignment.cs` の `anchorAxisX = frontAxisX + span − D/2` と同じ式を組む。`definition="center"` なら `19.500 + 0.5 − 0.5 = 19.500` と元の中心間距離に戻る(検算に使える)
@@ -760,13 +774,24 @@ python3 scripts/build-design-input.py --check docs/samples/arise_design_input.js
 | `pilePitch` | 鋼管矢板ピッチ | m | **前壁から自動代入** | 前壁の有効幅 B と一致 |
 | `everyNPiles` | 取付間隔(矢板何本ごと) | 本 | 1 | 1〜50、かつ間隔が 0.600〜20.000 m |
 | `tieSpacing` | タイロッド取付間隔 | m | **`pilePitch × everyNPiles`** | 派生量(ピッチの整数倍が構造的に保証される) |
-| `tieCount` | 組数 | 組 | **前壁総本数と `everyNPiles` から自動算定** | `(pieceCount−1)/everyNPiles + 1` |
+| `tieCount` | 組数 | 組 | **前壁総本数と `everyNPiles` から自動算定** | `(pieceCount−1)/everyNPiles` の切り上げ + 1 |
 | `hwl` | H.W.L. 標高 | m(D.L.) | 1.000 | 0.000〜5.000 |
 | `tieElevation` | タイロッド軸心標高 | m(D.L.) | 1.500(H.W.L. 既定値 + 0.5 m の固定値) | −5.000〜10.000 |
 | `layerColor` | 色 | ACI | 8 | 1〜255 |
-| `positionY` | 1 組目の位置 Y | m | − | UCS ピック(**X は前壁から自動計算**) |
+| `positionY` | 各組の位置 Y | m | **自動(ピック廃止)** | 1 組目 = 壁の 1 本目の矢板中心、最終組 = 最終矢板。**X は前壁から自動計算** |
 
 `span_length` は「前壁矢板中心 〜 陸側定着面」の水平距離(積算基準 3-4.5-(13))。定着金物はこの面より陸側へ張り出す。
+
+**配置規則**(2026-08-01)— タイロッドは**壁の 1 本目と最終 P 本目の矢板に必ず設置**し、その間を `everyNPiles` 本ごとに割り付ける。両端固定と等間隔は `(P−1)` が `everyNPiles` の倍数のときしか同時に成立しないため、端数 `r = (P−1) mod everyNPiles` は**最終スパンで吸収**する(最終スパンのみ `r` 本ぶんと短くなる)。端数スパンも矢板ピッチの整数倍のため、「タイ材は矢板中心を横断する」条件は全スパンで保たれる。`r > 0` の場合はコマンドが警告を出し、等間隔にできる `everyNPiles` の候補を併記する(エラー停止はしない)。
+
+例:B=0.8752 m、P=115 本
+
+| `everyNPiles` | 端数 r | 組数 | 配置(施工順位) | 最終スパン |
+|---|---|---|---|---|
+| 3 | 0 | 39 | 1, 4, 7, …, 115 | 2.6256 m(等間隔) |
+| 4 | 2 | 30 | 1, 5, 9, …, 113, **115** | 1.7504 m(短い) |
+
+`tieSpacing`(XData `tie_spacing`)は端数がある場合「代表 = 最大の取付間隔」を意味する。張力照査 `T = Ap × tieSpacing` はこの最大間隔で評価されるため安全側となる。
 
 **プロンプトを廃止した 9 項目**(計算式・XData は維持。`_Create` は固定値、`_Action` は前回保存値を使う):
 
@@ -780,7 +805,7 @@ python3 scripts/build-design-input.py --check docs/samples/arise_design_input.js
 
 ### 5.4 控え杭
 
-`SPQW_ANCHORPILE_Create` は**基準部材の選択操作を持たない**(2026-07-31)。位置 Y が最小のタイロッド(1 組目)を自動選択して軸心標高・配置間隔・本数を取得し、前壁はそのタイロッドの `front_handle` から自動解決する。
+`SPQW_ANCHORPILE_Create` は**基準部材の選択操作を持たない**(2026-07-31)。位置 Y が最小のタイロッド(1 組目)を自動選択して軸心標高を取得し、前壁はそのタイロッドの `front_handle` から自動解決する。**配置位置と本数は図面上の全タイロッドの `pos_y` をそのまま使う**(2026-08-01。配置間隔 × 本数での再現をやめた。両端固定の割付では最終スパンだけ間隔が変わるため、等間隔の仮定が崩れる)。結果として控え杭はタイロッドと 1 対 1 で必ず一致し、壁の 1 本目・最終矢板にも必ず立つ。
 
 | 英語名 | 日本語名 | 単位 | 既定値 | 範囲 |
 |---|---|---|---|---|
@@ -795,8 +820,8 @@ python3 scripts/build-design-input.py --check docs/samples/arise_design_input.js
 | `tieElevation` | タイロッド軸心標高 Z_tr | m(D.L.) | **タイロッドから自動代入** | 選択したタイロッドと一致 |
 | `headElevation` | 杭上端標高 Z_head | m(D.L.) | **タイロッド軸心標高 + 0.5 m**(`AnchorAlignment.HeadAboveTie_m`) | 内部 Z_tip 換算値が −80〜10 |
 | `colorIndex` | 本管の色 | ACI | 8 | 1〜255 |
-| `everyNPiles` / `pileCount` | 配置間隔 / 本数 | − | **タイロッドから自動代入** | `_Create` のみ |
-| `positionY` | 位置 Y | m | **図面内の全前壁のうち最小 Y に自動整列** | 2 本目以降は `始点Y + i × 配置間隔` |
+| `pileCount` | 本数 | 本 | **図面上のタイロッドの組数** | `_Create` のみ |
+| `positionY` | 位置 Y | m | **図面上の全タイロッドの `pos_y`** | i 本目 = i 組目のタイロッドと同じ Y |
 
 控え杭は前壁と異なり**傾斜角プロンプトを維持**している(斜杭の需要があるため)。Z_head → 内部 Z_tip の変換は控え杭自身の全長・傾斜角を使う。
 
@@ -1026,7 +1051,7 @@ PP で中心間距離がパイプ直径(165.2mm)より短い、つまり **2D �
 Core 層は AutoCAD 非依存のため WSL / Linux でもビルド・テストできる。Plugin / Dynamo 層は本体 DLL が無い環境ではスタブで構文検証まで行う。
 
 ```bash
-# Core + テスト(AutoCAD 不要。678 件が green であること)
+# Core + テスト(AutoCAD 不要。684 件が green であること)
 dotnet test tests/SheetPileQuayWall.Core.Tests -c Release
 
 # Plugin(AutoCAD コマンド)の構文検証(AutoCAD 不要。スタブとリンクする。配布不可)
@@ -1074,7 +1099,7 @@ AutoCAD / Civil 3D が既定パス以外にある場合は `-p:AcadRoot="..."` �
 │       ├── SpqwNodes.cs                  7 ノード(純計算)
 │       └── SpqwGeometryNodes.cs          3 ノード(ソリッド生成。実験的・未検証)
 ├── stubs/                               AutoCAD/Dynamo API スタブ(構文検証専用。配布禁止)
-├── tests/SheetPileQuayWall.Core.Tests/  xUnit 678 ケース + fixtures/
+├── tests/SheetPileQuayWall.Core.Tests/  xUnit 684 ケース + fixtures/
 ├── scripts/
 │   ├── port-from-legacy.sh              007/008 からの冪等移植
 │   ├── verify-dll-versions.ps1          参照 DLL バージョン実測
@@ -1106,7 +1131,7 @@ Dynamo ノードは AutoCAD コマンドとは**別の DLL** にあり、Dynamo 
 
 1. Civil 3D 2025 で `DYNAMO` コマンドを実行し Dynamo を起動する
 2. ライブラリペイン下部の「Import Library...」から `src\SheetPileQuayWall.Dynamo\bin\Release\net8.0-windows\SheetPileQuayWall.Dynamo.dll` を選択する(**`SheetPileQuayWall.Plugin.dll` ではない**)
-3. ノード検索に `SpqwNodes.` / `SpqwGeometryNodes.` と入力すると計 10 ノードが表示される
+3. ノード検索に `SpqwNodes.` / `SpqwGeometryNodes.` と入力すると計 11 ノードが表示される
 
 ### 7.5 トラブルシュート
 
@@ -1249,13 +1274,13 @@ Core の一部は 006/007/008 からの移植で、`scripts/port-from-legacy.sh`
 
 | 対象 | 検証状態 | 根拠・残作業 |
 |---|---|---|
-| Core 層の計算ロジック | ✅ **検証済み** | xUnit 678 ケース green(WSL) |
+| Core 層の計算ロジック | ✅ **検証済み** | xUnit 684 ケース green(WSL) |
 | 帳票 CSV のパース | ✅ 検証済み | サンプル 5 ファイルをインポータ直接呼び出しでエラー 0 件 |
 | 柱状図 CSV のパース・10 出力ポートの値 | ✅ 検証済み | Core 直接呼び出し。§4.5 の表と一致 |
 | 設計計算書の抽出・中間 JSON 生成 | ✅ 検証済み | 正常系 0 件 / 異常系 5 ケース(WSL の Python) |
 | 継手 3D モデルの幾何整合性 | ✅ 検証済み | `JointFit`(LT65/75/100 は非干渉、PP は中心間距離一定)。**PT は対象外** |
 | Plugin 層(19 コマンド) | ⚠️ **未検証** | スタブによる構文・型検証のみ。NETLOAD・図面生成・MOVE 追随・旧図面変換は実機待ち |
-| Dynamo ノード(10 ノード) | ⚠️ **未検証** | 同上。`[MultiReturn]` の日本語キー表示、Import Library の可否とも実機待ち |
+| Dynamo ノード(11 ノード) | ⚠️ **未検証** | 同上。`[MultiReturn]` の日本語キー表示、Import Library の可否とも実機待ち |
 | `SpqwGeometryNodes` の API シグネチャ | ⚠️ **未検証** | `Point`/`Circle`/`Solid` の各メソッドは一般的な Dynamo 3.x API 知識による**推測**。`ProtoGeometry.dll` を読み込めるか自体が未確認 |
 | Dynamo グラフ配線(§4.8・§4.9) | ⚠️ 未検証 | `File Path` / `Data.ImportCSV` / `Data.ParseJSON` の挙動は実機待ち。`ParseJSON` が使えない場合は JSON 読込ノードを追加する |
 | 参照 DLL バージョン | ⚠️ 未検証 | `verify-dll-versions.ps1` → exit 2(AutoCAD 未検出)。**exit 0 になるまで配布しない** |
@@ -1270,19 +1295,20 @@ Core の一部は 006/007/008 からの移植で、`scripts/port-from-legacy.sh`
 
 **過去のすべての変更点は `git log` で追える。** 本節は現在の設計を理解するうえで背景を知っておく価値がある、アーキテクチャ上の主要な決定だけを新しい順に要約する。
 
-1. **基準部材の選択操作を廃止し、控え杭天端の決め方を変更**(2026-07-31)。`SPQW_TIEROD_Create` は前壁を選択させず杭中心 Y が最小の矢板(壁の 1 本目)を自動選択、`SPQW_ANCHORPILE_Create` は位置 Y が最小のタイロッドを自動選択してそこから前壁も解決する(選択操作 3 回 → 0 回)。あわせて控え杭の杭上端標高の既定値を「前壁の杭上端標高」から「**タイ材中心 + 0.5 m**」(`AnchorAlignment.HeadAboveTie_m`)へ変更した。控え杭の天端は前壁の施工基面ではなくタイ材の取り付け位置で決まるため。既定条件では従来と同じ +2.000 m になる(675→678 ケース)。
-2. **別セッションの批判的レビュー指摘を反映**(`SpqwGeometryNodes` 中心に 8 件)。①タイロッドが全長の半分(+約5.3m)陸側にずれる配置バグを修正(`ExtrudeAsSolid` は片側押し出しなのに AutoCAD 版 `CreateFrustum`(原点中心)と同じ中点移動を使っていた)、②控え杭ノードの検証を前壁用 `InputValidator`(K011)からテスト済みの `AnchorPileSteel`(JIS A 5525)へ差し替え、③`Vector.ZAxis()` の Dispose 漏れ 2 箇所、④HWL 既定値変更の波及漏れ、⑤「TieElevation 既定値 = Hwl 既定値 + 0.5m」を固定するテストを追加(674→675 ケース)
-3. **`SpqwGeometryNodes` を新設**(`ProtoGeometry.dll` 参照、実験的・未検証)。Dynamo が焼き込んだジオメトリに XData を後付けする手段が無いため `_Action` 相当には対応せず、パラメトリック性は Dynamo のグラフ再実行に委ねる設計にした
-4. **PP形継手の3Dモデル幾何整合性を検証**(`JointFit.PpPipeCenterDistance`)。2 本の継手鋼管の中心間距離が外径に依らず一定であることを確認し回帰テスト化した
-5. **Dynamo ノードを独立プロジェクトへ分離**。実機で `Dynamo.Exceptions.LibraryLoadFailedException` が発生し、原因は `<Private>False</Private>` 参照(AcCoreMgd 等)が `deps.json` に載らず Dynamo 側の依存解決(`AssemblyDependencyResolver` ベースと推定)が失敗すること。AutoCAD の `NETLOAD` は独自の読み込み経路のため影響を受けなかった。**最初に試した `IsVisibleInDynamoLibrary(false)` の付与は効果が無く**、AutoCAD 参照を持たない別プロジェクトへの分離で解決した
-6. **前壁の内部表現を Z_tip 基準から Z_head 基準へ刷新**(XData キーも `head_x/_y/_z` に変更)。Z_tip は表示専用の計算値になった。旧図面は読み込み時に自動変換する
-7. **前壁の傾斜角パラメータを廃止**(直杭のみに簡略化)。**控え杭の杭上端標高の既定値を前壁と同じ値に変更**
-8. **タイロッド組数を前壁総本数から自動算定**し、9 項目のプロンプトを廃止(計算式・XData は維持)
-9. **控え杭の生成をタイロッド選択方式に変更**(軸心標高・配置間隔・本数を自動設定)。位置 Y は図面内の全前壁のうち最小 Y に自動整列
-10. **カスタム有効幅 B を使った際の部材間ズレを修正**(`FrontWallRef.EffectiveWidthM` 新設)
-11. **継手 3D モデルの幾何整合性を検証**(`JointFit`)。あわせて実機で発覚した `Region.CreateFromCurves` のクラッシュを `PolygonCleanup` で解消した
-12. **帳票 CSV 取り込み・柱状図解析・打設歩掛積算 4 系統・付帯船舶・杭打機/杭打船選定を追加**(フェーズ 5 以降)
-13. **007/008 からの Core 移植・部材間整合チェックの新設**(フェーズ 1〜3)
+1. **タイロッド・控え杭を両端の矢板に必ず設置する配置規則へ変更**(2026-08-01)。従来は 1 本目から `everyNPiles` 本ごとに並べるだけで、`(P−1)` が `everyNPiles` で割り切れない場合に**最終矢板にタイ材が付かなかった**。壁の 1 本目と最終 P 本目を固定し、端数は最終スパンで吸収する(`TieRodPitch.PileIndices` / `OffsetsY`)。あわせて ①タイロッドの 1 組目の Y ピックを廃止(壁の 1 本目に固定)、②控え杭は配置間隔 × 本数での再現をやめ**図面上の全タイロッドの Y に 1 対 1 で配置**、③Dynamo `CreateTieRodSolid` の引数を `tieSpacing_m`/`tieCount` → `pieceCount`/`everyNPiles` へ変更(破壊的変更)し、控え杭の Y 列を得る `SpqwNodes.CalcTiePlacement` を新設した(678→684 ケース)
+2. **基準部材の選択操作を廃止し、控え杭天端の決め方を変更**(2026-07-31)。`SPQW_TIEROD_Create` は前壁を選択させず杭中心 Y が最小の矢板(壁の 1 本目)を自動選択、`SPQW_ANCHORPILE_Create` は位置 Y が最小のタイロッドを自動選択してそこから前壁も解決する(選択操作 3 回 → 0 回)。あわせて控え杭の杭上端標高の既定値を「前壁の杭上端標高」から「**タイ材中心 + 0.5 m**」(`AnchorAlignment.HeadAboveTie_m`)へ変更した。控え杭の天端は前壁の施工基面ではなくタイ材の取り付け位置で決まるため。既定条件では従来と同じ +2.000 m になる(675→678 ケース)。
+3. **別セッションの批判的レビュー指摘を反映**(`SpqwGeometryNodes` 中心に 8 件)。①タイロッドが全長の半分(+約5.3m)陸側にずれる配置バグを修正(`ExtrudeAsSolid` は片側押し出しなのに AutoCAD 版 `CreateFrustum`(原点中心)と同じ中点移動を使っていた)、②控え杭ノードの検証を前壁用 `InputValidator`(K011)からテスト済みの `AnchorPileSteel`(JIS A 5525)へ差し替え、③`Vector.ZAxis()` の Dispose 漏れ 2 箇所、④HWL 既定値変更の波及漏れ、⑤「TieElevation 既定値 = Hwl 既定値 + 0.5m」を固定するテストを追加(674→675 ケース)
+4. **`SpqwGeometryNodes` を新設**(`ProtoGeometry.dll` 参照、実験的・未検証)。Dynamo が焼き込んだジオメトリに XData を後付けする手段が無いため `_Action` 相当には対応せず、パラメトリック性は Dynamo のグラフ再実行に委ねる設計にした
+5. **PP形継手の3Dモデル幾何整合性を検証**(`JointFit.PpPipeCenterDistance`)。2 本の継手鋼管の中心間距離が外径に依らず一定であることを確認し回帰テスト化した
+6. **Dynamo ノードを独立プロジェクトへ分離**。実機で `Dynamo.Exceptions.LibraryLoadFailedException` が発生し、原因は `<Private>False</Private>` 参照(AcCoreMgd 等)が `deps.json` に載らず Dynamo 側の依存解決(`AssemblyDependencyResolver` ベースと推定)が失敗すること。AutoCAD の `NETLOAD` は独自の読み込み経路のため影響を受けなかった。**最初に試した `IsVisibleInDynamoLibrary(false)` の付与は効果が無く**、AutoCAD 参照を持たない別プロジェクトへの分離で解決した
+7. **前壁の内部表現を Z_tip 基準から Z_head 基準へ刷新**(XData キーも `head_x/_y/_z` に変更)。Z_tip は表示専用の計算値になった。旧図面は読み込み時に自動変換する
+8. **前壁の傾斜角パラメータを廃止**(直杭のみに簡略化)。**控え杭の杭上端標高の既定値を前壁と同じ値に変更**
+9. **タイロッド組数を前壁総本数から自動算定**し、9 項目のプロンプトを廃止(計算式・XData は維持)
+10. **控え杭の生成をタイロッド選択方式に変更**(軸心標高・配置間隔・本数を自動設定)。位置 Y は図面内の全前壁のうち最小 Y に自動整列
+11. **カスタム有効幅 B を使った際の部材間ズレを修正**(`FrontWallRef.EffectiveWidthM` 新設)
+12. **継手 3D モデルの幾何整合性を検証**(`JointFit`)。あわせて実機で発覚した `Region.CreateFromCurves` のクラッシュを `PolygonCleanup` で解消した
+13. **帳票 CSV 取り込み・柱状図解析・打設歩掛積算 4 系統・付帯船舶・杭打機/杭打船選定を追加**(フェーズ 5 以降)
+14. **007/008 からの Core 移植・部材間整合チェックの新設**(フェーズ 1〜3)
 
 ---
 
@@ -1330,6 +1356,6 @@ Core の一部は 006/007/008 からの移植で、`scripts/port-from-legacy.sh`
 |---|---|---|
 | AutoCAD コマンド 19 個 | `grep CommandMethod src/**/Commands/*.cs` | 19 個、名称一致 |
 | Dynamo ノード 7 + 3 個 | `SpqwNodes.cs` / `SpqwGeometryNodes.cs` の public static | 一致 |
-| Core テスト 678 件 | `dotnet test` | 678 passed / 0 failed |
+| Core テスト 684 件 | `dotnet test` | 684 passed / 0 failed |
 | 参照 DLL 5 個と Copy Local | 各 `.csproj` | 一致(全て `<Private>False</Private>`) |
 | 有効幅 B の算定式 | `JointGeometry.EffectiveWidth(1.1, LT75)` | 1.178086 m(設計計算書の 1.17809 m と一致) |

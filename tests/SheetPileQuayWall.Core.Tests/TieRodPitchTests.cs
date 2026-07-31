@@ -122,25 +122,147 @@ namespace SheetPileQuayWall.Core.Tests
         }
 
         // T1301: 矢板本数と配置間隔(何本ごと)からタイロッド組数を自動算定する
-        //        (2026-07-29。1本目に配置し、以降 n 本ごとに配置した場合に必要な組数)
+        //        (2026-07-29。2026-08-01 に両端固定の配置規則へ変更し、端数が出る
+        //         組合せでは最終矢板ぶんが 1 組増える)
         [Xunit.Fact]
         public void T1301_CountFor_DerivesCountFromPieceCountAndEveryN()
         {
-            // 12 本の壁、3 本ごと → 1, 4, 7, 10 本目の 4 組
-            Xunit.Assert.Equal(4,
+            // 12 本の壁、3 本ごと → 1, 4, 7, 10 本目 + 最終 12 本目 の 5 組
+            Xunit.Assert.Equal(5,
                 SheetPileQuayWall.Core.TieRod.TieRodPitch.CountFor(12, 3));
 
             // 1 本ごと(新デフォルト) → 全本数ぶん
             Xunit.Assert.Equal(115,
                 SheetPileQuayWall.Core.TieRod.TieRodPitch.CountFor(115, 1));
 
-            // ちょうど割り切れる場合(10 本、5 本ごと)→ 1, 6 の 2 組
-            Xunit.Assert.Equal(2,
+            // 10 本、5 本ごと → 1, 6 本目 + 最終 10 本目 の 3 組(端数 4 本)
+            Xunit.Assert.Equal(3,
                 SheetPileQuayWall.Core.TieRod.TieRodPitch.CountFor(10, 5));
+
+            // 割り切れる場合(11 本、5 本ごと)→ 1, 6, 11 本目 の 3 組(端数なし)
+            Xunit.Assert.Equal(3,
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.CountFor(11, 5));
 
             // 単独杭(1 本)は 1 組
             Xunit.Assert.Equal(1,
                 SheetPileQuayWall.Core.TieRod.TieRodPitch.CountFor(1, 3));
+        }
+
+        // T1310: 両端固定の配置規則(2026-08-01)。1 本目と最終 P 本目に必ず入る
+        [Xunit.Fact]
+        public void T1310_PileIndices_AlwaysIncludesFirstAndLastPile()
+        {
+            // 端数あり: 12 本 3 本ごと → (11 mod 3 = 2) 最終スパンのみ 2 本
+            Xunit.Assert.Equal(new int[] { 1, 4, 7, 10, 12 },
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.PileIndices(12, 3));
+
+            // 端数なし: 13 本 3 本ごと → 全スパン 3 本の等間隔
+            Xunit.Assert.Equal(new int[] { 1, 4, 7, 10, 13 },
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.PileIndices(13, 3));
+
+            // 1 本ごとは全矢板
+            Xunit.Assert.Equal(new int[] { 1, 2, 3, 4 },
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.PileIndices(4, 1));
+
+            // n が壁を跨ぐ場合は両端のみ
+            Xunit.Assert.Equal(new int[] { 1, 6 },
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.PileIndices(6, 20));
+
+            // 単独杭は 1 組(最終 = 1 本目のため重複追加しない)
+            Xunit.Assert.Equal(new int[] { 1 },
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.PileIndices(1, 3));
+        }
+
+        // T1311: 100 m 級の実寸(B=0.8752 の 115 本)でも両端が入る
+        [Xunit.Fact]
+        public void T1311_PileIndices_LongWall_KeepsBothEnds()
+        {
+            int[] indices = SheetPileQuayWall.Core.TieRod.TieRodPitch.PileIndices(115, 4);
+
+            Xunit.Assert.Equal(1, indices[0]);
+            Xunit.Assert.Equal(115, indices[indices.Length - 1]);
+            Xunit.Assert.Equal(30, indices.Length);
+
+            // 最後から 2 番目は 113 本目。最終スパンだけ 2 本ぶんと短い
+            Xunit.Assert.Equal(113, indices[indices.Length - 2]);
+            Xunit.Assert.Equal(2,
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.RemainderPiles(115, 4));
+
+            // 割り切れる n では端数 0
+            Xunit.Assert.Equal(0,
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.RemainderPiles(115, 3));
+        }
+
+        // T1312: CountFor は PileIndices の要素数に一致する(定義の二重化を防ぐ)
+        [Xunit.Fact]
+        public void T1312_CountFor_MatchesPileIndicesLength()
+        {
+            for (int pieceCount = 1; pieceCount <= 40; pieceCount++)
+            {
+                for (int n = 1; n <= 12; n++)
+                {
+                    Xunit.Assert.Equal(
+                        SheetPileQuayWall.Core.TieRod.TieRodPitch.PileIndices(pieceCount, n).Length,
+                        SheetPileQuayWall.Core.TieRod.TieRodPitch.CountFor(pieceCount, n));
+                }
+            }
+        }
+
+        // T1313: 端数スパンを含む全スパンが矢板ピッチの整数倍であること。
+        //        矢板中心を横断する条件(TieRodParameters.Validate 7 番)は
+        //        端数スパンでも崩れてはならない
+        [Xunit.Fact]
+        public void T1313_OffsetsY_AllSpansAreIntegerMultiplesOfPitch()
+        {
+            double[] offsets = SheetPileQuayWall.Core.TieRod.TieRodPitch.OffsetsY(
+                115, 4, B_LT75_800);
+
+            for (int i = 1; i < offsets.Length; i++)
+            {
+                double span = offsets[i] - offsets[i - 1];
+                Xunit.Assert.True(
+                    SheetPileQuayWall.Core.TieRod.TieRodPitch.SpacingDeviation(
+                        span, B_LT75_800)
+                    <= SheetPileQuayWall.Core.TieRod.TieRodPitch.Tol_m,
+                    $"スパン {span:F4} m が矢板ピッチの整数倍ではありません(組 {i})。");
+            }
+
+            // 最終スパンは 2 本ぶん
+            Xunit.Assert.Equal(2.0 * B_LT75_800,
+                offsets[offsets.Length - 1] - offsets[offsets.Length - 2], 9);
+        }
+
+        // T1314: 末尾のオフセットが前壁の最終矢板の中心 Y と一致する(連結テスト)
+        [Xunit.Fact]
+        public void T1314_OffsetsY_LastMatchesLastFrontWallPileY()
+        {
+            const int pieceCount = 115;
+            double[] offsets = SheetPileQuayWall.Core.TieRod.TieRodPitch.OffsetsY(
+                pieceCount, 4, B_LT75_800);
+
+            Xunit.Assert.Equal(0.0, offsets[0], 9);
+            Xunit.Assert.Equal(
+                SheetPileQuayWall.Core.FrontWall.WallLayout.PositionY(
+                    0.0, pieceCount, B_LT75_800),
+                offsets[offsets.Length - 1], 9);
+        }
+
+        // T1315: 等間隔にできる n の候補は (P−1) の約数のうち間隔範囲に収まるもの
+        [Xunit.Fact]
+        public void T1315_UniformCandidates_ReturnsDivisorsWithinRange()
+        {
+            // 115 本 → P−1 = 114 = 2×3×19。約数 1,2,3,6,19,38,57,114 のうち
+            // n ≤ 50 かつ間隔 ≤ 20.000 m (0.8752 × 22 = 19.25 m が上限) を満たすもの
+            Xunit.Assert.Equal(new int[] { 1, 2, 3, 6, 19 },
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.UniformCandidates(115, B_LT75_800));
+
+            // 候補で割り付ければ端数は必ず 0 になる
+            foreach (int n in
+                SheetPileQuayWall.Core.TieRod.TieRodPitch.UniformCandidates(115, B_LT75_800))
+            {
+                Xunit.Assert.Equal(0,
+                    SheetPileQuayWall.Core.TieRod.TieRodPitch.RemainderPiles(115, n));
+            }
         }
 
         // T1276: 前壁の有効幅からタイロッド・控え杭が同じ間隔で並ぶ(連結テスト)

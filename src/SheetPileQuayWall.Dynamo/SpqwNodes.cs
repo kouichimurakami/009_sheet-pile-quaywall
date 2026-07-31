@@ -928,5 +928,52 @@ namespace SheetPileQuayWall.Dynamo
                 { "溶接工",                 labor.welder }
             };
         }
+
+        // ノード: SpqwNodes.CalcTiePlacement
+        // タイロッド・控え杭の配置位置(壁の 1 本目からの Y オフセット)を返す(2026-08-01)。
+        // 壁の 1 本目と最終 pieceCount 本目に必ず配置し、間を everyNPiles 本ごとに割り付ける。
+        // 控え杭はこの「配置 Y オフセット」を Point.ByCoordinates の y に渡すこと
+        // (端数スパンがある場合、Sequence の等間隔では再現できない)。
+        [Autodesk.DesignScript.Runtime.MultiReturn(new[]
+        {
+            "配置 Y オフセット [m]",
+            "配置矢板 (施工順位)",
+            "組数 [組]",
+            "取付間隔 [m]",
+            "端数スパン [本]",
+            "等間隔にできる本数ごと"
+        })]
+        public static System.Collections.Generic.Dictionary<string, object> CalcTiePlacement(
+            int pieceCount = 10,
+            int everyNPiles = 1,
+            double pilePitch_m = 0.8752)
+        {
+            string? err = SheetPileQuayWall.Core.TieRod.TieRodPitch.Validate(
+                pilePitch_m, everyNPiles);
+            if (err != null)
+            {
+                throw new System.ArgumentException(err, nameof(everyNPiles));
+            }
+
+            return new System.Collections.Generic.Dictionary<string, object>
+            {
+                { "配置 Y オフセット [m]",
+                  SheetPileQuayWall.Core.TieRod.TieRodPitch.OffsetsY(
+                      pieceCount, everyNPiles, pilePitch_m) },
+                { "配置矢板 (施工順位)",
+                  SheetPileQuayWall.Core.TieRod.TieRodPitch.PileIndices(
+                      pieceCount, everyNPiles) },
+                { "組数 [組]",
+                  SheetPileQuayWall.Core.TieRod.TieRodPitch.CountFor(pieceCount, everyNPiles) },
+                { "取付間隔 [m]",
+                  SheetPileQuayWall.Core.TieRod.TieRodPitch.SpacingFor(pilePitch_m, everyNPiles) },
+                { "端数スパン [本]",
+                  SheetPileQuayWall.Core.TieRod.TieRodPitch.RemainderPiles(
+                      pieceCount, everyNPiles) },
+                { "等間隔にできる本数ごと",
+                  SheetPileQuayWall.Core.TieRod.TieRodPitch.UniformCandidates(
+                      pieceCount, pilePitch_m) }
+            };
+        }
     }
 }

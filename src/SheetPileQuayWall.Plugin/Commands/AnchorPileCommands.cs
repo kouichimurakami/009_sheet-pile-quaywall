@@ -70,8 +70,12 @@ namespace SheetPileQuayWall.Plugin.Commands
                     $"Y {front.HeadPoint.Y:F4} m");
             }
 
-            double spacing_m = tieRod.Parameters.TieSpacing;
-            int pileCount = tieRod.Parameters.TieCount;
+            // 配置は図面上の全タイロッドの Y をそのまま使う(2026-08-01)。
+            // タイロッドは壁の 1 本目と最終本目に必ず配置され、端数が出る組合せでは
+            // 最終スパンだけ間隔が変わるため、配置間隔 × 本数では再現できない。
+            double[] tieRodYs =
+                SheetPileQuayWall.Plugin.DrawingHelper.AllTieRodPositionsY(db);
+            int pileCount = tieRodYs.Length;
 
             SheetPileQuayWall.Plugin.XData.AnchorPileRecord record =
                 new SheetPileQuayWall.Plugin.XData.AnchorPileRecord();
@@ -82,40 +86,35 @@ namespace SheetPileQuayWall.Plugin.Commands
                 front.HeadPoint, front.LengthM, front.InclDeg).Z;
             record.Input.TieElevM = tieRod.Parameters.TieElevation;
 
-            // 始点は図面内の前壁のうち杭中心 Y が最小のもの(壁の 1 本目)に自動整列する
-            // (2026-07-29。従来は選択した前壁自身の Y をそのまま使っており、壁の途中の
-            // 矢板を選ぶと控え杭の並びが 1 本目からずれていた)
-            double? minFrontY = SheetPileQuayWall.Plugin.DrawingHelper.MinFrontWallY(db);
-            record.Input.PositionY = minFrontY ?? front.HeadPoint.Y;
+            // 1 本目はタイロッドの 1 組目(= 壁の 1 本目の矢板)に整列する
+            record.Input.PositionY = tieRodYs[0];
 
             ed.WriteMessage(
                 $"\n  タイロッドから取得: 軸心標高 Z_tr {record.Input.TieElevM:F3} m / " +
-                $"配置間隔 {spacing_m:F4} m ({pileCount} 組)");
+                $"配置位置 {pileCount} 箇所(全タイロッドの Y)");
             ed.WriteMessage(
-                $"\n  位置 Y 始点(壁の 1 本目に自動整列): {record.Input.PositionY:F4} m");
+                $"\n  位置 Y 始点(タイロッド 1 組目): {record.Input.PositionY:F4} m");
 
             if (!PromptRecord(ed, record, front))
             {
                 return;
             }
 
-            double startY = record.Input.PositionY;
             SheetPileQuayWall.Core.AnchorPile.AnchorResult? lastResult = null;
 
             for (int i = 0; i < pileCount; i++)
             {
-                record.Input.PositionY = startY + i * spacing_m;
+                record.Input.PositionY = tieRodYs[i];
                 lastResult = SheetPileQuayWall.Core.AnchorPile.AnchorAlignment.Compute(
                     front.ToRef(), record.Input);
                 BuildAndAppend(db, record, lastResult, replaceId: null);
             }
 
             ed.WriteMessage("\n=== 控え杭 一括生成 ===");
-            ed.WriteMessage($"\n  本数          : {pileCount,10} 本");
-            ed.WriteMessage($"\n  配置間隔      : {spacing_m,10:F4} m (タイロッドから取得)");
-            ed.WriteMessage($"\n  始点 Y (1 本目): {startY,10:F4} m");
+            ed.WriteMessage($"\n  本数          : {pileCount,10} 本 (タイロッドと 1 対 1)");
+            ed.WriteMessage($"\n  始点 Y (1 本目): {tieRodYs[0],10:F4} m");
             ed.WriteMessage($"\n  終点 Y ({pileCount} 本目): " +
-                $"{startY + (pileCount - 1) * spacing_m,10:F4} m");
+                $"{tieRodYs[pileCount - 1],10:F4} m");
 
             PrintSummary(ed, record, lastResult!, front);
             ed.WriteMessage(

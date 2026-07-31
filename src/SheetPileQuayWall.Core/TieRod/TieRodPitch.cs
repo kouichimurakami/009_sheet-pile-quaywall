@@ -2,6 +2,15 @@
 //
 // タイロッド取付間隔・控え杭配置間隔を「鋼管矢板 何本ごと」から求める。
 //
+// 【配置規則】(2026-08-01 決定)
+// タイロッド・控え杭は壁の 1 本目と最終 P 本目の矢板に必ず設置し、その間を
+// everyNPiles 本ごとに割り付ける。両端固定と等間隔は (P−1) が everyNPiles の
+// 倍数のときしか同時に成立しないため、割り切れない場合は端数 r = (P−1) mod n を
+// 最終スパンで吸収する (最終スパンのみ r 本ぶんと短くなる)。
+// 端数スパンも矢板ピッチの整数倍であるため、「タイ材は矢板中心を横断する」条件
+// (TieRodParameters.Validate の 7 番) は全スパンで保たれる。
+// 等間隔にできる n の候補は UniformCandidates が返す (呼び出し側の警告表示用)。
+//
 // TieRodParameters.Validate の 7 番は「取付間隔が矢板ピッチの整数倍であること」を
 // 要求する (タイロッドは海側鋼管矢板の中央を横断するため)。従来はこの整数倍を
 // 利用者が電卓で計算して m 単位で入力していたが (既定値 2.400 m は 0.8752 m の
@@ -36,13 +45,79 @@ namespace SheetPileQuayWall.Core.TieRod
         }
 
         /// <summary>
+        /// 配置する矢板の施工順位 (1 始まり) を昇順で返す。
+        /// 1 本目から everyNPiles 本ごとに並べ、末尾が最終矢板 pieceCount でなければ
+        /// 最終矢板を追加する (両端に必ず設置する。最終スパンのみ短くなる)。
+        /// </summary>
+        public static int[] PileIndices(int pieceCount, int everyNPiles)
+        {
+            if (pieceCount < 1) pieceCount = 1;
+            if (everyNPiles < 1) everyNPiles = 1;
+
+            System.Collections.Generic.List<int> indices =
+                new System.Collections.Generic.List<int>();
+            for (int index = 1; index <= pieceCount; index += everyNPiles)
+            {
+                indices.Add(index);
+            }
+            if (indices[indices.Count - 1] != pieceCount)
+            {
+                indices.Add(pieceCount);
+            }
+            return indices.ToArray();
+        }
+
+        /// <summary>
+        /// 壁の 1 本目を原点とした各組の Y オフセット [m]。
+        /// 末尾は (pieceCount − 1) × pilePitch となり、最終矢板の中心 Y
+        /// (WallLayout.PositionY) と一致する。
+        /// </summary>
+        public static double[] OffsetsY(int pieceCount, int everyNPiles, double pilePitch_m)
+        {
+            int[] indices = PileIndices(pieceCount, everyNPiles);
+            double[] offsets = new double[indices.Length];
+            for (int i = 0; i < indices.Length; i++)
+            {
+                offsets[i] = (indices[i] - 1) * pilePitch_m;
+            }
+            return offsets;
+        }
+
+        /// <summary>
         /// 矢板本数と配置間隔(何本ごと)から、必要なタイロッド組数を求める(2026-07-29)。
-        /// 1 本目の矢板に 1 組目を配置し、以降 everyNPiles 本ごとに配置した場合に
-        /// 矢板 pieceCount 本の壁を覆うのに必要な組数(位置は 1, 1+n, 1+2n, ... の昇順)。
+        /// 両端固定の配置規則 (2026-08-01) により PileIndices の要素数に等しい。
         /// </summary>
         public static int CountFor(int pieceCount, int everyNPiles)
         {
-            return (pieceCount - 1) / everyNPiles + 1;
+            return PileIndices(pieceCount, everyNPiles).Length;
+        }
+
+        /// <summary>
+        /// 最終スパンの端数 [本]。0 なら全スパンが everyNPiles 本の等間隔になる。
+        /// </summary>
+        public static int RemainderPiles(int pieceCount, int everyNPiles)
+        {
+            if (pieceCount < 1) pieceCount = 1;
+            if (everyNPiles < 1) everyNPiles = 1;
+            return (pieceCount - 1) % everyNPiles;
+        }
+
+        /// <summary>
+        /// 端数を出さずに等間隔で割り付けられる everyNPiles の候補 (昇順)。
+        /// (pieceCount − 1) の約数のうち、Validate を通るものだけを返す。
+        /// </summary>
+        public static int[] UniformCandidates(int pieceCount, double pilePitch_m)
+        {
+            System.Collections.Generic.List<int> candidates =
+                new System.Collections.Generic.List<int>();
+            for (int n = EveryNPiles_Min; n <= EveryNPiles_Max; n++)
+            {
+                if (RemainderPiles(pieceCount, n) == 0 && Validate(pilePitch_m, n) == null)
+                {
+                    candidates.Add(n);
+                }
+            }
+            return candidates.ToArray();
         }
 
         /// <summary>

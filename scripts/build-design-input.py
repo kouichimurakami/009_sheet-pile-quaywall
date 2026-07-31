@@ -142,16 +142,28 @@ def derive(doc):
         span_009 = sp["center_to_center"]
 
     pile_count = None
-    tie_count = None
     if site["wall_length"]:
         pile_count = math.ceil(site["wall_length"] / fw["pile_pitch"] - TOL_M)
-        tie_count = int(site["wall_length"] // tr["tie_spacing"])
+
+    # 計算書の取付間隔 [m] を「矢板何本ごと」へ換算する(009 の入力単位)
+    every_n = None
+    if fw["pile_pitch"] and tr["tie_spacing"]:
+        every_n = max(1, round(tr["tie_spacing"] / fw["pile_pitch"]))
+
+    # 1 本目と最終 pile_count 本目に必ず配置し、間を every_n 本ごとに割り付ける
+    # (2026-08-01。割り切れない場合は最終矢板ぶんが 1 組増える)
+    tie_count = None
+    if pile_count and every_n:
+        tie_count = (pile_count - 1) // every_n + 1
+        if (pile_count - 1) % every_n:
+            tie_count += 1
 
     return {
         "front_wall_length": round(fw["head_z"] - fw["tip_z"], 3),
         "anchor_head_z": round(ap["tip_z"] + ap["length"], 3),
         "span_009": span_009,
         "pile_count": pile_count,
+        "every_n": every_n,
         "tie_count": tie_count,
     }
 

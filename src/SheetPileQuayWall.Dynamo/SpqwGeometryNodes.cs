@@ -226,6 +226,11 @@ namespace SheetPileQuayWall.Dynamo
         // ノード: SpqwGeometryNodes.CreateTieRodSolid
         // タイロッド(直杭、法線直角方向の軸線に沿った円柱)を組数ぶん生成する。
         // 前壁は選択せず、海側鋼管矢板径・矢板ピッチ・海側取付点 X を明示引数で受け取る。
+        //
+        // 2026-08-01: 引数 tieSpacing_m / tieCount を pieceCount / everyNPiles へ変更した
+        // (破壊的変更)。壁の 1 本目と最終 pieceCount 本目に必ず配置し、間を
+        // everyNPiles 本ごとに割り付ける — AutoCAD 版 SPQW_TIEROD_Create と同じ規則。
+        // positionY_m は壁の 1 本目の矢板中心 Y を渡すこと。
         public static Autodesk.DesignScript.Geometry.Solid[] CreateTieRodSolid(
             double baseX_m = 0.0,
             double positionY_m = 0.0,
@@ -233,8 +238,8 @@ namespace SheetPileQuayWall.Dynamo
             double spanLength_m = 10.000,
             double pileDiameter_m = 1.000,
             double pilePitch_m = 1.200,
-            double tieSpacing_m = 2.400,
-            int tieCount = 1,
+            int pieceCount = 10,
+            int everyNPiles = 1,
             double hwl_m = 1.000,
             double tieElevation_m = 1.500)
         {
@@ -244,8 +249,10 @@ namespace SheetPileQuayWall.Dynamo
             p.SpanLength = spanLength_m;
             p.PileDiameter = pileDiameter_m;
             p.PilePitch = pilePitch_m;
-            p.TieSpacing = tieSpacing_m;
-            p.TieCount = tieCount;
+            p.TieSpacing = SheetPileQuayWall.Core.TieRod.TieRodPitch.SpacingFor(
+                pilePitch_m, everyNPiles);
+            p.TieCount = SheetPileQuayWall.Core.TieRod.TieRodPitch.CountFor(
+                pieceCount, everyNPiles);
             p.Hwl = hwl_m;
             p.TieElevation = tieElevation_m;
             p.ApplyStandardNutHeight();
@@ -258,11 +265,16 @@ namespace SheetPileQuayWall.Dynamo
             double radius_m = r.NominalDiameter / 2.0;
             double seaX = baseX_m + r.SeaEndX;
 
+            // 配置は TieRodResult.RodPositionsY(008 由来の等間隔)ではなく TieRodPitch を
+            // 使う。両端固定の割付では最終スパンだけ間隔が変わるため
+            double[] offsetsY = SheetPileQuayWall.Core.TieRod.TieRodPitch.OffsetsY(
+                pieceCount, everyNPiles, pilePitch_m);
+
             Autodesk.DesignScript.Geometry.Solid[] rods =
-                new Autodesk.DesignScript.Geometry.Solid[r.RodPositionsY.Count];
-            for (int i = 0; i < r.RodPositionsY.Count; i++)
+                new Autodesk.DesignScript.Geometry.Solid[offsetsY.Length];
+            for (int i = 0; i < offsetsY.Length; i++)
             {
-                double rodY = positionY_m + r.RodPositionsY[i];
+                double rodY = positionY_m + offsetsY[i];
                 rods[i] = PlaceTieRod(radius_m, r.TotalLength, seaX, rodY, r.AxisZ);
             }
             return rods;

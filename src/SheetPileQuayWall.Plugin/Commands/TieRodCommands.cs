@@ -58,11 +58,20 @@ namespace SheetPileQuayWall.Plugin.Commands
                 new SheetPileQuayWall.Core.TieRod.TieRodParameters();
 
             // 前壁から決まる値を既定値として提示する(整合チェックを通しやすくするため)
-            double positionY;
-            if (!PromptParameters(ed, p, front, out positionY))
+            int everyNPiles;
+            if (!PromptParameters(ed, p, front, out everyNPiles))
             {
                 return;
             }
+
+            // 1 組目は壁の 1 本目の矢板中心に置く(2026-08-01。従来は Y をピックさせて
+            // いたが、矢板中心に乗る保証が無く「最初の矢板に必ず設置」を満たせなかった)。
+            // front は杭中心 Y が最小の矢板(壁の 1 本目)なので、その Y が始点になる。
+            double startY = front.HeadPoint.Y;
+
+            // 各組の Y。1 本目から everyNPiles 本ごと、末尾は必ず最終矢板
+            double[] offsetsY = SheetPileQuayWall.Core.TieRod.TieRodPitch.OffsetsY(
+                front.PieceCount, everyNPiles, p.PilePitch);
 
             SheetPileQuayWall.Core.TieRod.TieRodResult r;
             if (!TryCompute(ed, p, out r))
@@ -81,9 +90,13 @@ namespace SheetPileQuayWall.Plugin.Commands
                 SheetPileQuayWall.Plugin.DrawingHelper.EnsureLayer(
                     db, tr, LayerName, p.LayerColor);
 
-                for (int i = 0; i < p.TieCount; i++)
+                // TieRodResult.RodPositionsY は 008 由来の等間隔配置(i × 取付間隔)で
+                // あり、両端固定の端数スパンを表現できない。009 は TieRodPitch の
+                // オフセットを使う(TieRodParameters.cs / TieRodCalculator.cs は
+                // port-from-legacy.sh の同期対象のため変更できない)
+                for (int i = 0; i < offsetsY.Length; i++)
                 {
-                    double rodY = positionY + r.RodPositionsY[i];
+                    double rodY = startY + offsetsY[i];
 
                     SheetPileQuayWall.Plugin.XData.TieRodRecord record =
                         new SheetPileQuayWall.Plugin.XData.TieRodRecord();
@@ -101,6 +114,10 @@ namespace SheetPileQuayWall.Plugin.Commands
             }
 
             PrintSummary(ed, p, r, baseX, front);
+            ed.WriteMessage($"\n  始点 Y (矢板 1 本目)      : {startY,10:F4} m");
+            ed.WriteMessage(
+                $"\n  終点 Y (矢板 {front.PieceCount} 本目) : " +
+                $"{startY + offsetsY[offsetsY.Length - 1],10:F4} m");
             ed.WriteMessage(
                 $"\n{p.TieCount} 組を生成し、パラメータを XData (RegApp: " +
                 $"{SheetPileQuayWall.Plugin.XData.TieRodRecord.RegAppName}) に保存しました。");
@@ -154,12 +171,14 @@ namespace SheetPileQuayWall.Plugin.Commands
             }
 
             SheetPileQuayWall.Core.TieRod.TieRodParameters p = stored.Parameters;
-            double positionY;
-            if (!PromptParameters(ed, p, front, out positionY,
-                defaultY: stored.PositionY, askPlanPoint: false))
+            int everyNPiles;
+            if (!PromptParameters(ed, p, front, out everyNPiles))
             {
                 return;
             }
+
+            // _Action は選択した 1 組のみを同位置に再生成する(保存された Y を保持)
+            double positionY = stored.PositionY;
 
             SheetPileQuayWall.Core.TieRod.TieRodResult r;
             if (!TryCompute(ed, p, out r))
@@ -300,16 +319,16 @@ namespace SheetPileQuayWall.Plugin.Commands
         }
 
         // ────────────────────────────────────────────────────────────────────
-        // askPlanPoint=false(_Action)では positionY に defaultY を保持し、再ピックしない
+        // 平面位置は入力させない。1 組目は壁の 1 本目、以降は everyNPiles 本ごと、
+        // 最終組は最終矢板に固定される(2026-08-01)。everyNPiles は呼び出し側が
+        // 配置オフセットの算出に使う
         private static bool PromptParameters(
             Autodesk.AutoCAD.EditorInput.Editor ed,
             SheetPileQuayWall.Core.TieRod.TieRodParameters p,
             SheetPileQuayWall.Plugin.XData.FrontWallRecord front,
-            out double positionY,
-            double defaultY = 0.0,
-            bool askPlanPoint = true)
+            out int everyNPiles)
         {
-            positionY = defaultY;
+            everyNPiles = DefaultEveryNPiles;
 
             // 鋼種・設計基準・荷重状態はプロンプトを廃止し、既定値(HT690・部分係数法・
             // 永続)を固定で使う(2026-07-29)。張力照査の計算式自体は変更していない。
@@ -350,17 +369,17 @@ namespace SheetPileQuayWall.Plugin.Commands
             // 取付間隔は「矢板何本ごと」で受け、ピッチの整数倍として導出する。
             // 従来は m 入力で、利用者が B × n を手計算する必要があった
             // (既定値 2.400 m は B=0.8752 m の整数倍でなく Enter で検証エラーになった)
-            int everyNPiles = SheetPileQuayWall.Core.TieRod.TieRodPitch.PilesPerSpacing(
+            int storedN = SheetPileQuayWall.Core.TieRod.TieRodPitch.PilesPerSpacing(
                 p.TieSpacing, p.PilePitch);
-            if (everyNPiles < SheetPileQuayWall.Core.TieRod.TieRodPitch.EveryNPiles_Min)
+            if (storedN < SheetPileQuayWall.Core.TieRod.TieRodPitch.EveryNPiles_Min)
             {
-                everyNPiles = DefaultEveryNPiles;
+                storedN = DefaultEveryNPiles;
             }
 
             int pickedN;
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskInt(
-                ed, $"\nタイロッド取付間隔 (矢板何本ごと) <{everyNPiles}>: ",
-                everyNPiles,
+                ed, $"\nタイロッド取付間隔 (矢板何本ごと) <{storedN}>: ",
+                storedN,
                 SheetPileQuayWall.Core.TieRod.TieRodPitch.EveryNPiles_Min,
                 SheetPileQuayWall.Core.TieRod.TieRodPitch.EveryNPiles_Max,
                 out pickedN)) return false;
@@ -371,19 +390,41 @@ namespace SheetPileQuayWall.Plugin.Commands
                 return false;
             }
 
+            everyNPiles = pickedN;
             p.TieSpacing = SheetPileQuayWall.Core.TieRod.TieRodPitch.SpacingFor(
                 p.PilePitch, pickedN);
             ed.WriteMessage(
                 $"\n  → 取付間隔 = {p.PilePitch:F4} m × {pickedN} 本 = {p.TieSpacing:F4} m");
 
             // タイロッド組数は前壁の総本数と取付間隔(何本ごと)から自動算定する
-            // (2026-07-29。1本目に配置し、以降 pickedN 本ごとに配置した場合に
-            // 矢板全本数を覆うのに必要な組数)。プロンプトは廃止した。
+            // (2026-07-29)。2026-08-01 から壁の 1 本目と最終本目に必ず配置するため、
+            // (総本数−1) が pickedN で割り切れない場合は最終矢板ぶんが 1 組増える。
             p.TieCount = SheetPileQuayWall.Core.TieRod.TieRodPitch.CountFor(
                 front.PieceCount, pickedN);
             ed.WriteMessage(
-                $"\n  → タイロッド組数 = 前壁 {front.PieceCount} 本 ÷ {pickedN} 本ごと → " +
+                $"\n  → タイロッド組数 = 前壁 {front.PieceCount} 本の 1 本目と " +
+                $"{front.PieceCount} 本目に必ず配置し、間を {pickedN} 本ごと → " +
                 $"{p.TieCount} 組(自動算定)");
+
+            // 端数が出る組合せでは最終スパンだけ短くなる。等間隔にできる n を案内する
+            // (エラー停止はしない。両端固定を優先する 2026-08-01 の決定による)
+            int remainder = SheetPileQuayWall.Core.TieRod.TieRodPitch.RemainderPiles(
+                front.PieceCount, pickedN);
+            if (remainder > 0)
+            {
+                ed.WriteMessage(
+                    $"\n  警告: 最終スパンのみ {remainder} 本 " +
+                    $"({remainder * p.PilePitch:F4} m) と短くなります。");
+
+                int[] candidates = SheetPileQuayWall.Core.TieRod.TieRodPitch.UniformCandidates(
+                    front.PieceCount, p.PilePitch);
+                if (candidates.Length > 0)
+                {
+                    ed.WriteMessage(
+                        $"\n        全スパンを等間隔にするには {string.Join(", ", candidates)} " +
+                        "本ごとが使えます。");
+                }
+            }
 
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
                 ed, $"\nH.W.L. 標高 (m, D.L. 基準) <{p.Hwl:F3}>: ",
@@ -409,19 +450,10 @@ namespace SheetPileQuayWall.Plugin.Commands
                 p.LayerColor, 1, 255, out colorIdx)) return false;
             p.LayerColor = colorIdx;
 
-            // 平面位置は施設延長方向 Y のみ。X は前壁から自動計算する(決定8)。
-            // _Action では保存済み Y を保持する(同位置再生成)ため再ピックしない
-            if (askPlanPoint)
-            {
-                double pickedX, pickedY;
-                if (!SheetPileQuayWall.Plugin.Prompt.TryAskPlanPoint(
-                    ed, "\n1 組目の位置を指定 (Y のみ使用。X は前壁から自動計算): ",
-                    out pickedX, out pickedY))
-                {
-                    return false;
-                }
-                positionY = pickedY;
-            }
+            // 平面位置は入力させない(2026-08-01)。X は前壁から自動計算し(決定8)、
+            // Y は _Create が壁の 1 本目、_Action が保存値をそれぞれ与える。
+            // 従来は 1 組目の Y をピックさせていたが、矢板中心に乗る保証が無く
+            // 「最初に打設する矢板に必ず設置する」要件と両立しなかった。
 
             // ── 部材間整合チェック(前壁 ⟺ タイロッド、フェーズ3)───────────
             SheetPileQuayWall.Core.FrontWallRef frontRef = front.ToRef();
