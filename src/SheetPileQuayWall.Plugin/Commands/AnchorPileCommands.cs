@@ -29,25 +29,45 @@ namespace SheetPileQuayWall.Plugin.Commands
             Autodesk.AutoCAD.DatabaseServices.Database db = doc.Database;
             Autodesk.AutoCAD.EditorInput.Editor ed = doc.Editor;
 
-            string frontHandle;
-            SheetPileQuayWall.Plugin.XData.FrontWallRecord? front =
-                SheetPileQuayWall.Plugin.DrawingHelper.SelectFrontWall(
-                    ed, db, "\n基準とする前壁鋼管矢板 (SPQW_FRONTWALL) を選択: ",
-                    out frontHandle);
-            if (front == null)
+            // 配置間隔・本数・タイロッド軸心標高は、代表となるタイロッドから自動取得する
+            // (2026-07-29。タイロッド自身が既に配置間隔・本数・軸心標高を持っているため)。
+            // タイロッド自体も選択させず、位置 Y が最小のもの(1 組目)を自動選択する
+            // (2026-07-31。SPQW_TIEROD_Create の前壁自動選択と揃えた)。
+            SheetPileQuayWall.Plugin.XData.TieRodRecord? tieRod =
+                SheetPileQuayWall.Plugin.DrawingHelper.FindFirstTieRod(db);
+            if (tieRod == null)
             {
+                ed.WriteMessage(
+                    $"\nエラー: 図面にタイロッド (RegApp: " +
+                    $"{SheetPileQuayWall.Plugin.XData.TieRodRecord.RegAppName}) が" +
+                    $"ありません。SPQW_TIEROD_Create で先に作成してください。");
                 return;
             }
 
-            // 配置間隔・本数・タイロッド軸心標高は、代表となるタイロッドから自動取得する
-            // (2026-07-29。従来は前壁の有効幅と「矢板何本ごと」の手入力から導出していたが、
-            // タイロッド自身が既に配置間隔・本数・軸心標高を持っているため、それをそのまま使う)
-            SheetPileQuayWall.Plugin.XData.TieRodRecord? tieRod =
-                SheetPileQuayWall.Plugin.DrawingHelper.SelectTieRod(
-                    ed, db, "\n配置間隔・本数の基準とするタイロッド (SPQW_TIEROD) を選択: ");
-            if (tieRod == null)
+            // 前壁はタイロッドが参照している Handle から解決する(選択させない)。
+            // Handle が失効している図面では _Action と同じく選択にフォールバックする。
+            string frontHandle = tieRod.FrontHandle;
+            SheetPileQuayWall.Plugin.XData.FrontWallRecord? front =
+                SheetPileQuayWall.Plugin.DrawingHelper.TryResolveFrontWall(db, frontHandle);
+            if (front == null)
             {
-                return;
+                ed.WriteMessage(
+                    $"\nタイロッドが参照する前壁 (Handle: {frontHandle}) が見つかりません。");
+                front = SheetPileQuayWall.Plugin.DrawingHelper.SelectFrontWall(
+                    ed, db, "\n基準とする前壁鋼管矢板 (SPQW_FRONTWALL) を選択: ",
+                    out frontHandle);
+                if (front == null)
+                {
+                    return;
+                }
+            }
+            else
+            {
+                ed.WriteMessage(
+                    $"\n  タイロッドを自動選択(1 組目): 位置 Y {tieRod.PositionY:F4} m");
+                ed.WriteMessage(
+                    $"\n  前壁を自動解決(タイロッドの参照先): Handle {frontHandle} / " +
+                    $"Y {front.HeadPoint.Y:F4} m");
             }
 
             double spacing_m = tieRod.Parameters.TieSpacing;
@@ -312,11 +332,13 @@ namespace SheetPileQuayWall.Plugin.Commands
             // Action() では前回保存値をそのまま使う。
 
             // 杭先端標高 Z_tip ではなく杭上端(杭頭)標高 Z_head を数値入力させる。
-            // 既定値は控え杭自身の全長・傾斜角から式で逆算するのではなく、前壁の
-            // 杭上端標高(前壁の内部表現そのもの)をそのまま使う(控え杭は前壁と同じ
-            // 施工基面から打設される想定のため。2026-07-29)。入力後の Z_head → Z_tip
-            // 変換は控え杭自身の全長・傾斜角を使う(従来どおり)。
-            double headElevDefault_m = front.HeadPoint.Z;
+            // 既定値はタイロッド軸心標高 Z_tr の 0.5 m 上とする(2026-07-31。従来は
+            // 前壁の杭上端標高をそのまま使っていたが、控え杭の天端はタイ材の取り付け
+            // 位置で決まるため、タイロッド軸心からの相対で定める)。Z_tr は _Create では
+            // 自動選択したタイロッドから、_Action では前回保存値から入る。
+            // 入力後の Z_head → Z_tip 変換は控え杭自身の全長・傾斜角を使う(従来どおり)。
+            double headElevDefault_m =
+                a.TieElevM + SheetPileQuayWall.Core.AnchorPile.AnchorAlignment.HeadAboveTie_m;
 
             if (!SheetPileQuayWall.Plugin.Prompt.TryAskDouble(
                 ed, $"\n杭上端標高 Z_head (m, D.L. 基準) <{headElevDefault_m:F3}>: ",

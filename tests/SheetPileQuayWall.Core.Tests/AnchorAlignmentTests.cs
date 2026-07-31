@@ -176,5 +176,47 @@ namespace SheetPileQuayWall.Core.Tests
             Xunit.Assert.Equal(5.2512, actual[2], 9);
             Xunit.Assert.Equal(7.8768, actual[3], 9);
         }
+
+        // T1310: 控え杭天端はタイロッド軸心の 0.5 m 上(2026-07-31)。
+        // SPQW_ANCHORPILE_Create / _Action の杭上端標高 Z_head の既定値がこの規則で
+        // 決まるため、値そのものを固定する。
+        [Xunit.Fact]
+        public void T1310_HeadAboveTie_Is500mm()
+        {
+            Xunit.Assert.Equal(
+                0.500, SheetPileQuayWall.Core.AnchorPile.AnchorAlignment.HeadAboveTie_m, 9);
+        }
+
+        // T1311: タイロッドの既定軸心標高 1.500 m から求めた控え杭天端 2.000 m が、
+        // AnchorInput の従来の既定値(先端 −18.0 + 全長 20.0)と一致する。
+        // 天端の決め方を「前壁の杭上端標高」から「タイ材中心 + 0.5 m」へ変えても
+        // 既定条件では同じ位置になることを固定し、既定値の片側だけを動かす変更を検出する。
+        [Xunit.Fact]
+        public void T1311_HeadFromDefaultTieElevation_MatchesLegacyDefaultHead()
+        {
+            SheetPileQuayWall.Core.TieRod.TieRodParameters p =
+                new SheetPileQuayWall.Core.TieRod.TieRodParameters();
+
+            double head = p.TieElevation +
+                SheetPileQuayWall.Core.AnchorPile.AnchorAlignment.HeadAboveTie_m;
+
+            Xunit.Assert.Equal(2.000, head, 9);
+            Xunit.Assert.Equal(-18.0 + 20.0, head, 9);
+        }
+
+        // T1312: 天端をタイ材中心 + 0.5 m に置くと、Z_tr は必ず控え杭の杭体範囲内に入る
+        // (Validate の「Z_tr が控え杭の杭体範囲内」を既定の全長で満たすこと)。
+        [Xunit.Fact]
+        public void T1312_HeadFromTie_PassesValidation()
+        {
+            SheetPileQuayWall.Core.AnchorPile.AnchorInput a = Anchor();
+            a.TieElevM = 2.5;
+            // 直杭のため Z_tip = Z_head − L
+            a.TipElevM = a.TieElevM +
+                SheetPileQuayWall.Core.AnchorPile.AnchorAlignment.HeadAboveTie_m - a.LengthM;
+
+            Xunit.Assert.Null(
+                SheetPileQuayWall.Core.AnchorPile.AnchorAlignment.Validate(Front(), a));
+        }
     }
 }

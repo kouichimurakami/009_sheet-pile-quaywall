@@ -36,15 +36,23 @@ namespace SheetPileQuayWall.Plugin.Commands
             Autodesk.AutoCAD.DatabaseServices.Database db = doc.Database;
             Autodesk.AutoCAD.EditorInput.Editor ed = doc.Editor;
 
+            // 基準の前壁は選択させず、図面内で杭中心 Y が最小の矢板(壁の 1 本目)を
+            // 自動選択する(2026-07-31)。壁の途中の矢板を選ぶと基準がずれるため。
             string frontHandle;
             SheetPileQuayWall.Plugin.XData.FrontWallRecord? front =
-                SheetPileQuayWall.Plugin.DrawingHelper.SelectFrontWall(
-                    ed, db, "\n基準とする前壁鋼管矢板 (SPQW_FRONTWALL) を選択: ",
-                    out frontHandle);
+                SheetPileQuayWall.Plugin.DrawingHelper.FindFirstFrontWall(db, out frontHandle);
             if (front == null)
             {
+                ed.WriteMessage(
+                    $"\nエラー: 図面に前壁鋼管矢板 (RegApp: " +
+                    $"{SheetPileQuayWall.Plugin.XData.FrontWallRecord.RegAppName}) が" +
+                    $"ありません。SPQW_FRONTWALL_Create で先に作成してください。");
                 return;
             }
+
+            ed.WriteMessage(
+                $"\n  前壁を自動選択(壁の 1 本目): Handle {frontHandle} / " +
+                $"Y {front.HeadPoint.Y:F4} m / 外径 {front.OuterDm * 1000:F1} mm");
 
             SheetPileQuayWall.Core.TieRod.TieRodParameters p =
                 new SheetPileQuayWall.Core.TieRod.TieRodParameters();

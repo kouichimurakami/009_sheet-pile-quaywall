@@ -18,6 +18,13 @@ namespace SheetPileQuayWall.Core.AnchorPile
         // 誤差許容 1 mm (CLAUDE.PRIVATE.md §6)
         public const double Tol_m = 0.001;
 
+        // 控え杭天端はタイロッド軸心の 0.5 m 上に置く (2026-07-31)。
+        // 従来は前壁の杭上端標高をそのまま既定値にしていたが、控え杭の天端は
+        // タイ材の取り付け位置で決まるため、タイロッド軸心からの相対で定める。
+        // TieRodParameters の既定 (軸心標高 1.500 m) では天端 2.000 m となり、
+        // AnchorPileRecord の従来の既定 (先端 -18.0 + 全長 20.0) と一致する。
+        public const double HeadAboveTie_m = 0.500;
+
         // 戻り値: null = 正常、非null = エラーメッセージ。
         // 不一致時はエラー停止し、自動補正も再生成もしない (§9)。
         public static string? Validate(FrontWallRef front, AnchorInput a)
