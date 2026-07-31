@@ -1,0 +1,58 @@
+{
+  "source": {
+    "xlsx": "アライズ鋼管矢板岸壁.xlsx",
+    "mapping": "docs/references/アライズ計算書-009パラメータ対応表.md",
+    "generator": "scripts/build-design-input.py",
+    "unit": "長さは全てメートル、角度は度 (CLAUDE.PRIVATE.md §2.1)"
+  },
+  "front_wall": {
+    "outer_d": 1.1,
+    "wall_t": 0.022,
+    "joint": "LT75",
+    "grade": "SKY490",
+    "head_z": 1.5,
+    "tip_z": -29.0,
+    "pile_pitch": 1.17809
+  },
+  "tie_rod": {
+    "rod_d": null,
+    "tie_elev": 1.0,
+    "tie_spacing": 2.356,
+    "hwl": 1.5,
+    "waling_h": 0.38,
+    "anchor_reaction": 266.757
+  },
+  "anchor_pile": {
+    "outer_d": 1.0,
+    "wall_t": 0.011,
+    "length": 12.5,
+    "tip_z": -10.5,
+    "head_to_tie": 1.0,
+    "incl_deg": 0.0,
+    "closed_tip": false
+  },
+  "span": {
+    "center_to_center": 19.5,
+    "definition": "要確認"
+  },
+  "site": {
+    "wall_length": null,
+    "origin_x": 0.0,
+    "origin_y": 0.0
+  },
+  "derived": {
+    "front_wall_length": 30.5,
+    "anchor_head_z": 2.0,
+    "span_009": null,
+    "pile_count": null,
+    "tie_count": null
+  },
+  "validation": {
+    "errors": [
+      "tie_rod.rod_d が未設定です。タイブル F270T の呼び径をメーカーカタログで確認し、009 のカタログ規格径 (φ25〜φ90) をメートルで記入してください。",
+      "span.definition が \"要確認\" のままです。計算書の間距離定義図を確認し、\"center\" (前壁中心〜控え杭中心) または \"land_face\" (前壁中心〜控え杭陸側定着面) を記入してください。誤ると控え杭位置が 0.500 m ずれます。",
+      "site.wall_length が未設定です。計算書は 1 断面の計算のため施設延長を含みません。現場条件から記入してください。"
+    ],
+    "warnings": []
+  }
+}
