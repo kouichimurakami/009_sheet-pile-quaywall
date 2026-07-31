@@ -9,7 +9,7 @@
 | 対象構造物 | 前壁鋼管矢板(直杭)+ タイロッド + 控え杭(傾斜可) |
 | 環境 | C# / .NET 8.0(`net8.0-windows`、x64)/ AutoCAD 2025 .NET / Civil 3D 2025 / Dynamo 3.3 |
 | 構成 | Core(計算層)/ Plugin(AutoCAD 層)/ Dynamo(Zero Touch Node 層)の 3 プロジェクト |
-| 規模 | AutoCAD コマンド **19** / Dynamo ノード **11** / Core テスト **684 件 green** |
+| 規模 | AutoCAD コマンド **21** / Dynamo ノード **13** / Core テスト **688 件 green** |
 | 由来 | `006_steel-pipe-pile` / `007_steel-pipe-sheet-pile` / `008_tairod` の後継・統合版。**009 単独でビルド・実行できる** |
 
 関連ドキュメント:
@@ -28,8 +28,8 @@
 |---|---|
 | [1. 概略図](#1-概略図) | データフロー・断面図・座標系 |
 | [2. 参照アセンブリ](#2-参照アセンブリ) | DLL 一覧・プロジェクト依存関係 |
-| [3. AutoCAD / Civil 3D コマンド](#3-autocad--civil-3d-コマンド) | 19 コマンド・ワークフロー・打設工法の選択・XData |
-| [4. Dynamo ノード](#4-dynamo-ノード) | 11 ノード・入力 3 経路・グラフ配線 |
+| [3. AutoCAD / Civil 3D コマンド](#3-autocad--civil-3d-コマンド) | 21 コマンド・ワークフロー・打設工法の選択・XData |
+| [4. Dynamo ノード](#4-dynamo-ノード) | 13 ノード・入力 3 経路・グラフ配線 |
 | [5. 入力パラメータ](#5-入力パラメータ) | 部材別の入力表・CSV / JSON 形式 |
 | [6. 計算値(自動算出)](#6-計算値自動算出) | 派生量と信頼度ラベル |
 | [7. ビルド方法](#7-ビルド方法) | ビルド・登録・トラブルシュート |
@@ -58,7 +58,7 @@
    (積算ソフト出力)        │    │                    │   └──────────────────────┘
                           │    │ AutoCAD 非依存      │   ┌──────────────────────┐
  ③ 設計計算書 JSON         │    │ BCL のみ参照        │──▶│ 諸元・数量・歩掛      │
-   arise_design_input ────┤    │ 684 テスト green    │   │ (コマンドライン出力)  │
+   arise_design_input ────┤    │ 688 テスト green    │   │ (コマンドライン出力)  │
    (Dynamo 標準ノード)     │    └────────────────────┘   └──────────────────────┘
                           │                              ┌──────────────────────┐
  ④ 柱状図 CSV             ─┘                          ──▶│ Geometry(Dynamo 焼込)│
@@ -143,7 +143,7 @@
               ┌───────────────────────────────────┐
               │  SheetPileQuayWall.Core           │  参照: BCL のみ
               │  計算層(AutoCAD 非依存)           │  → WSL / Linux でテスト可
-              │  684 テスト green                  │
+              │  688 テスト green                  │
               └──────┬──────────────────┬─────────┘
                      │                  │
         ┌────────────▼───────┐   ┌──────▼──────────────────────┐
@@ -155,7 +155,7 @@
         └────────┬───────────┘   └──────┬──────────────────────┘
                  │                      │
             NETLOAD で登録         Import Library で登録
-            SPQW_* 19 コマンド     SpqwNodes / SpqwGeometryNodes 11 ノード
+            SPQW_* 21 コマンド     SpqwNodes / SpqwGeometryNodes 13 ノード
 ```
 
 ### 2.2 参照 DLL
@@ -174,7 +174,7 @@
 
 ## 3. AutoCAD / Civil 3D コマンド
 
-全 **19 コマンド**。接頭辞は `SPQW`(Sheet Pile Quay Wall)。
+全 **21 コマンド**。接頭辞は `SPQW`(Sheet Pile Quay Wall)。
 
 | パターン | 役割 |
 |---|---|
@@ -216,6 +216,8 @@
 | `SPQW_ANCHORPILE_Action` | 前壁基準の整列位置に再生成(MOVE していても整列位置へ戻る) |
 | `SPQW_ANCHORPILE_Query` | 諸元・整列座標・杭面間浄距離・積算数量を出力 |
 | `SPQW_ANCHORPILE_Estimate` | **打撃工法**の打設歩掛積算(4節 3-4.6、**陸上打設のみ**) |
+| `SPQW_ANCHORPILE_VibroEstimate` | **振動工法・バイブロ単独**の打設歩掛積算(16節 3-2、**海上打設のみ**) |
+| `SPQW_ANCHORPILE_VibroJetEstimate` | **振動工法・ジェット併用**の打設歩掛積算(16節 3-1、陸上/海上とも) |
 | `SPQW_ANCHORPILE_ImportCsv` | **前壁選択** → CSV 帳票 → 一括生成 |
 
 **施設全体**
@@ -261,7 +263,9 @@
 
 ### 3.3 打設工法の選択
 
-3 つの打設積算コマンドは積算基準上の**別節・別歩掛**であり、規格選定の基礎も労務編成も基準作業能力係数も異なる。**混用してはならない。**
+6 つの打設積算コマンドは積算基準上の**別節・別歩掛**であり、規格選定の基礎も労務編成も基準作業能力係数も異なる。**混用してはならない。**
+
+前壁・控え杭とも、打撃工法は 4節 本体工(前壁 3-4.5 鋼矢板式 / 控え杭 3-4.6 鋼杭式)、振動工法は 16節 仮設工による。4節の適用工法表はいずれも振動工法(バイブロハンマ)を標準工法に挙げ、その施工歩掛は「現場条件を勘案の上、16節 仮設工によることができる」と注記する(3-4.5-11 / 3-4.6-9)。
 
 ```
                   対象部材は?
@@ -270,36 +274,51 @@
      控え杭                         前壁
         │                             │
         ▼                             ▼
- SPQW_ANCHORPILE_Estimate      振動への配慮が必要?
- (4節 3-4.6、陸上のみ)              │
-                          ┌─────────┴─────────┐
-                        YES                   NO
-                          │                    │
-                          ▼                    ▼
-                  VibroJetEstimate    支持層へ打込む/中間層を打抜く?
-                  (ジェット併用)              │
-                                     ┌───────┴───────┐
-                                   YES              NO
-                                     │               │
-                                     ▼               ▼
-                        バイブロ単独は標準適用外   海上打設?
-                        → 打撃 or ジェット併用      │
-                                            ┌──────┴──────┐
-                                           NO            YES
-                                            │             │
-                                            ▼             ▼
-                                   FRONTWALL_Estimate  騒音・油飛散への配慮?
-                                   (打撃・陸上)         YES→ VibroEstimate
-                                                       NO → Estimate(打撃)
+  振動への配慮が必要?           振動への配慮が必要?
+        │                             │
+  ┌─────┴─────┐               ┌───────┴───────┐
+ NO          YES             YES              NO
+  │            │              │                │
+  ▼            ▼              ▼                ▼
+ANCHORPILE   打設は陸上?   VibroJetEstimate  支持層へ打込む/中間層を打抜く?
+_Estimate       │          (ジェット併用)          │
+(打撃・陸上)  ┌──┴──┐                       ┌──────┴──────┐
+             陸上   海上                    YES            NO
+              │      │                       │             │
+              ▼      ▼                       ▼             ▼
+   ANCHORPILE_        ANCHORPILE_   バイブロ単独は標準適用外  海上打設?
+   VibroJetEstimate   VibroEstimate → 打撃 or ジェット併用     │
+   (16節3-1)          (16節3-2)                        ┌──────┴──────┐
+                                                      NO            YES
+                                                       │             │
+                                                       ▼             ▼
+                                              FRONTWALL_Estimate  騒音・油飛散への配慮?
+                                              (打撃・陸上)         YES→ VibroEstimate
+                                                                  NO → Estimate(打撃)
 ```
 
-| 工法 | コマンド | 出典 | 規格選定の基礎 | 施工区分 | ei |
-|---|---|---|---|---|---|
-| 打撃(ディーゼル/油圧ハンマ) | `..._Estimate` | 4節 3-4.5 | 鋼材質量 + 貫入抵抗値 R | 陸上 / 海上 | 陸 0.90 / 海 0.50 |
-| 振動・バイブロ単独 | `..._VibroEstimate` | 16節 3-2 | 鋼材質量 + R(継手 Rj を加算) | **海上のみ** | 海 0.70 |
-| 振動・ジェット併用 | `..._VibroJetEstimate` | 16節 3-1 | **必要偏心モーメント K₀** | 陸上 / 海上 | 陸 0.80 / 海 0.70 |
+**控え杭を陸上でバイブロ打設する場合、単独(16節 3-2)は使えない。** 3-2 の適用範囲が「海上で行う鋼管杭・鋼管矢板の打設」に限られ、陸上のバイブロ歩掛を持つ 16節 2-1 は「鋼矢板・H形鋼杭」で鋼管杭を含まないため、**陸上 × 鋼管杭 × バイブロ単独の歩掛は基準に存在しない**。陸上で振動工法が必要な場合はジェット併用(16節 3-1。鋼管杭・陸上/海上とも規定あり)を用いる。
 
-基準の適用工法表(3-1-3)による標準適用の目安:
+| 部材 | 工法 | コマンド | 出典 | 規格選定の基礎 | 施工区分 | ei |
+|---|---|---|---|---|---|---|
+| 前壁 | 打撃(ディーゼル/油圧ハンマ) | `SPQW_FRONTWALL_Estimate` | 4節 3-4.5 | 鋼材質量 + 貫入抵抗値 R | 陸上 / 海上 | 陸 0.90 / 海 0.50 |
+| 前壁 | 振動・バイブロ単独 | `SPQW_FRONTWALL_VibroEstimate` | 16節 3-2 | 鋼材質量 + R(継手 Rj を加算) | **海上のみ** | 海 0.70 |
+| 前壁 | 振動・ジェット併用 | `SPQW_FRONTWALL_VibroJetEstimate` | 16節 3-1 | **必要偏心モーメント K₀** | 陸上 / 海上 | 陸 0.80 / 海 0.70 |
+| 控え杭 | 打撃(ディーゼル/油圧ハンマ) | `SPQW_ANCHORPILE_Estimate` | 4節 3-4.6 | 鋼材質量 + 貫入抵抗値 R | **陸上のみ** | 陸 0.90 |
+| 控え杭 | 振動・バイブロ単独 | `SPQW_ANCHORPILE_VibroEstimate` | 16節 3-2 | 鋼材質量 + R(**継手なし**) | **海上のみ** | 海 0.70 |
+| 控え杭 | 振動・ジェット併用 | `SPQW_ANCHORPILE_VibroJetEstimate` | 16節 3-1 | **必要偏心モーメント K₀** | 陸上 / 海上 | 陸 0.80 / 海 0.70 |
+
+控え杭(鋼管杭)と前壁(鋼管矢板)は同じ 16節の歩掛を使うが、**打込み対象が異なる**:
+
+| 項目 | 鋼管杭(控え杭) | 鋼管矢板(前壁) |
+|---|---|---|
+| 打込み速度 Lo(3-16-30) | 0.90 m/分 | 0.75 m/分 |
+| 継手の貫入抵抗 Rj(3-16-29) | **0**(継手なし) | R₁ × 10⁻¹ |
+| 継手加算時間 ε(3-16-19) | **0** | 0.3 × ℓj |
+| とび工(3-16-31、打設長 ≦25m / >25m) | 2 / 4 人 | 3 / 5 人 |
+| 規格選定に使う質量 | 本管のみ | 本管 + 継手金物 |
+
+基準の適用工法表(3-1-3 / 3-4.6-9)による標準適用の目安:
 
 | 条件 | ディーゼル | 油圧 | バイブロ | ジェット併用 |
 |---|---|---|---|---|
@@ -374,6 +393,8 @@ Civil 3D 2025 同梱の Dynamo 3.3 で使う Zero Touch Node。**`SheetPileQuayW
 | `CalcVibroJetEstimate` | 前壁・ジェット併用の打設歩掛(16節 3-1) | 26 | 36 |
 | `CalcAnchorPileDriveEstimate` | 控え杭・打撃工法の打設歩掛(4節 3-4.6) | 10 | 18 |
 | `CalcTiePlacement` | タイロッド・控え杭の配置 Y オフセット・組数・端数スパン | 3 | 6 |
+| `CalcAnchorPileVibroEstimate` | 控え杭・バイブロ単独の打設歩掛(16節 3-2、海上のみ) | 12 | 24 |
+| `CalcAnchorPileVibroJetEstimate` | 控え杭・ジェット併用の打設歩掛(16節 3-1、陸上/海上) | 23 | 35 |
 | `CreateAnchorPileSolid` | 控え杭ソリッド(本管 + 閉端時は底板、傾斜角対応) | 6 | 1 |
 | `CreateFrontWallPileSolid` | 前壁本体円筒(θ=0 固定、継手なし) | 4 | 1 |
 | `CreateTieRodSolid` | タイロッド(組数ぶんの配列を返す。組数は `pieceCount` / `everyNPiles` から自動算定) | 10 | N |
@@ -486,6 +507,8 @@ R 用と Sb 用が異なるのは、表層の埋土(N=3)が Sb の除外しき�
 | `CalcVibroEstimate` | `SPQW_FRONTWALL_VibroEstimate` | 海上打設固定 |
 | `CalcVibroJetEstimate` | `SPQW_FRONTWALL_VibroJetEstimate` | 入力 26 個で最多。`ValidateJetApplicability`(D≦1,500mm・L≦40m)で例外 |
 | `CalcAnchorPileDriveEstimate` | `SPQW_ANCHORPILE_Estimate` | `inclDeg` で斜杭 K=1.2 を判定 |
+| `CalcAnchorPileVibroEstimate` | `SPQW_ANCHORPILE_VibroEstimate` | 海上打設固定。鋼管杭のため Rj=0・Lo=0.90 |
+| `CalcAnchorPileVibroJetEstimate` | `SPQW_ANCHORPILE_VibroJetEstimate` | 既定は陸上。ε=0(継手なし) |
 
 ```
  [Number]  D_mm/t_mm/L_m ────────┐
@@ -761,6 +784,20 @@ python3 scripts/build-design-input.py --check docs/samples/arise_design_input.js
 | `jointCountPerPile` | 継杭の継手個所数 | 箇所 | 0 | 0〜5 |
 | `obstacle` / `needCrawlerCrane` | 障害 / クローラクレーン | − | なし / しない | − |
 
+**控え杭・振動工法バイブロ単独**(`SPQW_ANCHORPILE_VibroEstimate`、16節 3-2)— 施工区分は尋ねない(**海上打設のみ**)
+
+| 英語名 | 日本語名 | 単位 | 既定値 | 範囲 |
+|---|---|---|---|---|
+| `driveLength` | 打設長 Lb | m | 全長 | 1〜80(表層の連続 N=0 区間は除く) |
+| `pileCount` | 打設本数 | 本 | 1 | 1〜500 |
+| `nTip` / `nAvg` | 先端地盤 N 値 / 周辺地盤の加重平均 N 値 | − | 50 / 20 | 1〜100 |
+| `jointCountPerPile` | 継杭の継手個所数 | 箇所 | 0 | 0〜5 |
+| `seaCondition` / `obstacle` / `needDiverVessel` | 海象条件 / 障害 / 潜水士船 | − | 普通 / なし / しない | − |
+
+**控え杭・振動工法ジェット併用**(`SPQW_ANCHORPILE_VibroJetEstimate`、16節 3-1)— 前壁版(§5.2)と同じ 26 項目から `jointType` / `pieceIndex` / `pieceCount` / `jointLength` を除いたもの。既定の施工区分は**陸上**(前壁版は海上)、継手加算時間 ε は控え杭に継手が無いため常に 0。
+
+いずれも**斜杭(θ≠0)では警告を出す**。振動工法の基準作業能力係数 ei は直杭を前提とし、斜杭は基準上「別途検討」で、打撃工法の K=1.2(3-4.6-14)に相当する係数が振動工法には無いため(値は直杭で算出した参考値)。
+
 ### 5.3 タイロッド
 
 008 の 18 項目のうち 9 項目はプロンプトを廃止した(下表)。**基準の前壁は選択させず、図面内で杭中心 Y が最小の矢板(壁の 1 本目)を自動選択する**(2026-07-31)。海側鋼管矢板径・矢板ピッチはその前壁から自動代入する。
@@ -886,14 +923,15 @@ python3 scripts/build-design-input.py --check docs/samples/arise_design_input.js
 | `frontwall_import_spec.csv` | 「規格」列フォールバック(`φ800×12 L=21.0m LT75`) | 5 行。**杭先端標高だけは別列が必須** |
 | `tierod_import.csv` | 必須 16 列 + 列挙型 3 列 | 3 組、Y=0 / 2.6256 / 5.2512m、前壁整合 OK |
 | `anchorpile_import.csv` | 必須 7 列 + 任意 3 列 | 4 本、杭面間浄距離 8.800m、前壁整合 OK |
-| `boringlog.csv` | 柱状図(§5.6) | 5 層、出力は §4.5 の表と一致 |
+| `boringlog.csv` | 柱状図(§5.6)。打止め換算・岩盤 qu を含む形式確認用 | 5 層、出力は §4.5 の表と一致 |
+| `boringlog_arise.csv` | 柱状図(§5.6)。設計計算書実例の土質定数から起こした実務例 | 5 層、加重平均N値 23.961(根入れ長 38.0m) |
 | `arise_design_input.json` | 設計計算書の中間 JSON(§4.9) | 未確定 3 項目でエラー 3 件(意図どおり) |
 
 **単位が部材ごとに異なる**。前壁・控え杭は外径・肉厚のみ mm で他は m、**タイロッドは全て m**(`rod_d` は `48` ではなく `0.048`)。タイロッドで mm 値を書くと `Validate` が「単位はメートルです」で停止する。
 
 ### 5.6 柱状図 CSV
 
-`SpqwNodes.CalcWeightedN`(§4.5)の入力形式。1 行 = 1 層。
+`SpqwNodes.CalcWeightedN`(§4.5)の入力形式。1 行 = 1 層。サンプルは `docs/samples/` に 2 種ある。
 
 | # | 列名(別名) | 単位 | 必須 | 説明 |
 |---|---|---|---|---|
@@ -907,6 +945,8 @@ python3 scripts/build-design-input.py --check docs/samples/arise_design_input.js
 | 8 | `penetration_cm` / `貫入量` | cm | 任意 | 換算N値 = 分子(1500/1800/2100/2400)÷ 貫入量 |
 | 9 | `qu_value` / `一軸圧縮強度` | N/mm² | `岩盤`のみ○ | `岩盤`以外の行では指定不可 |
 
+**サンプル 1**:`docs/samples/boringlog.csv` — 打止め換算(50回法)と岩盤 qu を含む**形式確認用**
+
 ```csv
 土層名,土質区分,標高上端,標高下端,層厚,N値,打撃回数法,貫入量,一軸圧縮強度
 埋土,砂質土等,0.0,-2.0,2.0,3,,,
@@ -915,6 +955,26 @@ python3 scripts/build-design-input.py --check docs/samples/arise_design_input.js
 洪積砂礫層,砂質土等,-10.0,-15.0,5.0,55,50,3.3,
 軟岩層,岩盤,-15.0,-20.0,5.0,,,,4.2
 ```
+
+**サンプル 2**:`docs/samples/boringlog_arise.csv` — 設計計算書実例(`アライズ鋼管矢板岸壁.xlsx`)の**土質定数(陸側)から起こした実務例**
+
+```csv
+土層名,土質区分,標高上端,標高下端,層厚,N値,打撃回数法,貫入量,一軸圧縮強度
+裏込め土(NO.1),砂質土等,3.00,-8.10,11.10,31,,,
+沖積砂質土層(NO.2),砂質土等,-8.10,-11.00,2.90,26,,,
+沖積砂質土層(NO.3),砂質土等,-11.00,-17.50,6.50,26,,,
+沖積粘性土層(NO.4),粘性土,-17.50,-24.50,7.00,10,,,
+洪積粘性土層(NO.5),粘性土,-24.50,-35.00,10.50,24,,,
+```
+
+| 項目 | 内容 |
+|---|---|
+| 層境界 | 計算書 S0 `A193`〜`A197`【土質定数(陸側)】NO.1〜5 の標高をそのまま採用(**確定**) |
+| 調査終了深度 | −35.00 m。前壁の杭先端 −29.00 m(`arise_design_input.json`)の 6 m 下で打ち切った(**推定**) |
+| N 値 | 計算書は φ / C0 で与え **N 値を持たない**ため換算した(**推定**)。砂質土:大崎式 `N = (φ−15)² / 20`(φ=40 → 31、φ=38 → 26)、粘性土:`N = c / 6.25`(c=60 → 10、c=150 → 24) |
+| 出力 | 加重平均N値 23.961(R 用・Sb 用とも。根入れ長 38.0 m)/ 砂質土等 28.707 / 粘性土 18.400 / 岩盤なし |
+
+R 用と Sb 用が同値なのは、表層の N=31 がどちらの除外しきい値(N=0 / N≦5)にも該当しないため。**N 値は換算値**なので、実案件では必ず実測の柱状図に差し替えること。
 
 行順は問わない(標高上端の降順に並べ替えたうえで地表からの連続性を検証する)。
 
@@ -1051,7 +1111,7 @@ PP で中心間距離がパイプ直径(165.2mm)より短い、つまり **2D �
 Core 層は AutoCAD 非依存のため WSL / Linux でもビルド・テストできる。Plugin / Dynamo 層は本体 DLL が無い環境ではスタブで構文検証まで行う。
 
 ```bash
-# Core + テスト(AutoCAD 不要。684 件が green であること)
+# Core + テスト(AutoCAD 不要。688 件が green であること)
 dotnet test tests/SheetPileQuayWall.Core.Tests -c Release
 
 # Plugin(AutoCAD コマンド)の構文検証(AutoCAD 不要。スタブとリンクする。配布不可)
@@ -1092,14 +1152,14 @@ AutoCAD / Civil 3D が既定パス以外にある場合は `-p:AcadRoot="..."` �
 │   │   │                                 Importer・SpecTextParser・QuantityReconciliation)
 │   │   └── Geotech/                     柱状図解析(BoringLog.cs)
 │   ├── SheetPileQuayWall.Plugin/        AutoCAD 依存層
-│   │   ├── Commands/                    SPQW_* 19 コマンド(8 ファイル)
+│   │   ├── Commands/                    SPQW_* 21 コマンド(11 ファイル)
 │   │   ├── XData/                       XDataStore + 3 部材のレコード
 │   │   └── DrawingHelper.cs / Prompt.cs / SolidBuilder.cs
 │   └── SheetPileQuayWall.Dynamo/        Zero Touch Node 層(AutoCAD 本体 DLL を参照しない)
 │       ├── SpqwNodes.cs                  7 ノード(純計算)
 │       └── SpqwGeometryNodes.cs          3 ノード(ソリッド生成。実験的・未検証)
 ├── stubs/                               AutoCAD/Dynamo API スタブ(構文検証専用。配布禁止)
-├── tests/SheetPileQuayWall.Core.Tests/  xUnit 684 ケース + fixtures/
+├── tests/SheetPileQuayWall.Core.Tests/  xUnit 688 ケース + fixtures/
 ├── scripts/
 │   ├── port-from-legacy.sh              007/008 からの冪等移植
 │   ├── verify-dll-versions.ps1          参照 DLL バージョン実測
@@ -1111,7 +1171,7 @@ AutoCAD / Civil 3D が既定パス以外にある場合は `-p:AcadRoot="..."` �
     ├── implementation-plan.md           設計決定 1〜11・フェーズ計画・実機検証項目
     ├── features.html                    機能概要(図表中心)
     ├── references/                      設計計算書(アライズ)と 009 パラメータ対応表
-    └── samples/                          帳票 CSV 5 種 + 柱状図 CSV + 設計入力 JSON
+    └── samples/                          帳票 CSV 5 種 + 柱状図 CSV 2 種 + 設計入力 JSON
 ```
 
 ### 7.3 AutoCAD / Civil 3D への登録(NETLOAD)
@@ -1121,7 +1181,7 @@ AutoCAD / Civil 3D が既定パス以外にある場合は `-p:AcadRoot="..."` �
 1. AutoCAD 2025 または Civil 3D 2025 を起動する
 2. コマンドラインに `NETLOAD` と入力し Enter
 3. `src\SheetPileQuayWall.Plugin\bin\Release\net8.0-windows\SheetPileQuayWall.Plugin.dll` を選択する
-4. ロード完了後、[§3](#3-autocad--civil-3d-コマンド) の全 19 コマンドが実行可能になる
+4. ロード完了後、[§3](#3-autocad--civil-3d-コマンド) の全 21 コマンドが実行可能になる
 
 > スタブビルド(`-p:UseAutoCadStubs=true`)の出力は `AutoCadStubs.dll` を含むため **NETLOAD しないこと**(配布不可)。
 
@@ -1131,7 +1191,7 @@ Dynamo ノードは AutoCAD コマンドとは**別の DLL** にあり、Dynamo 
 
 1. Civil 3D 2025 で `DYNAMO` コマンドを実行し Dynamo を起動する
 2. ライブラリペイン下部の「Import Library...」から `src\SheetPileQuayWall.Dynamo\bin\Release\net8.0-windows\SheetPileQuayWall.Dynamo.dll` を選択する(**`SheetPileQuayWall.Plugin.dll` ではない**)
-3. ノード検索に `SpqwNodes.` / `SpqwGeometryNodes.` と入力すると計 11 ノードが表示される
+3. ノード検索に `SpqwNodes.` / `SpqwGeometryNodes.` と入力すると計 13 ノードが表示される
 
 ### 7.5 トラブルシュート
 
@@ -1250,7 +1310,7 @@ Core の一部は 006/007/008 からの移植で、`scripts/port-from-legacy.sh`
 | 6 | 打設歩掛の Dynamo ノードは D/t/L 等の寸法チェックを行わないため、AutoCAD コマンド側より入力ミスに気付きにくい |
 | 7 | **タイロッド・控え杭の帳票 CSV は `pos_y` が必須列**。前壁 CSV のような自動配置は行わない |
 | 8 | **控え杭の帳票 CSV は前壁との整合チェックを取り込み時に行えない**。単体範囲チェックのみを行い、span 干渉チェックは前壁選択後に行う |
-| 9 | **控え杭の打設歩掛は陸上打設のみ**。4節 3-4.6 には海上打設の船団構成・労務編成もあるが未実装 |
+| 9 | **控え杭の打撃工法は陸上打設のみ**。4節 3-4.6 には海上打設の船団構成・労務編成もあるが未実装(振動工法は 2026-08-01 に追加。バイブロ単独=海上のみ、ジェット併用=陸上/海上。**陸上×鋼管杭×バイブロ単独は基準に歩掛が無いため実装しない**) |
 | 10 | **ジェット併用のメイン船はトン数ランクまで選定していない**。必要吊上げ荷重 Cf の数値を示すのみで、具体的なランクへ変換する表が 3-1 節側に見当たらない。付帯船舶は両工法とも実装済み |
 | 11 | **`CalcWeightedN` と積算コマンドの自動連携は無い**。算出値は `nAvg` プロンプトへ手入力で転記する。また積算コマンドは R 用・Sb 用を区別せず単一の `nAvg` を両方に使うため、両者が大きく異なる地盤では使い分けを利用者が判断すること(§4.5 の例では 160.848 と 185.133 で 24 の差) |
 
@@ -1274,13 +1334,13 @@ Core の一部は 006/007/008 からの移植で、`scripts/port-from-legacy.sh`
 
 | 対象 | 検証状態 | 根拠・残作業 |
 |---|---|---|
-| Core 層の計算ロジック | ✅ **検証済み** | xUnit 684 ケース green(WSL) |
+| Core 層の計算ロジック | ✅ **検証済み** | xUnit 688 ケース green(WSL) |
 | 帳票 CSV のパース | ✅ 検証済み | サンプル 5 ファイルをインポータ直接呼び出しでエラー 0 件 |
 | 柱状図 CSV のパース・10 出力ポートの値 | ✅ 検証済み | Core 直接呼び出し。§4.5 の表と一致 |
 | 設計計算書の抽出・中間 JSON 生成 | ✅ 検証済み | 正常系 0 件 / 異常系 5 ケース(WSL の Python) |
 | 継手 3D モデルの幾何整合性 | ✅ 検証済み | `JointFit`(LT65/75/100 は非干渉、PP は中心間距離一定)。**PT は対象外** |
-| Plugin 層(19 コマンド) | ⚠️ **未検証** | スタブによる構文・型検証のみ。NETLOAD・図面生成・MOVE 追随・旧図面変換は実機待ち |
-| Dynamo ノード(11 ノード) | ⚠️ **未検証** | 同上。`[MultiReturn]` の日本語キー表示、Import Library の可否とも実機待ち |
+| Plugin 層(21 コマンド) | ⚠️ **未検証** | スタブによる構文・型検証のみ。NETLOAD・図面生成・MOVE 追随・旧図面変換は実機待ち |
+| Dynamo ノード(13 ノード) | ⚠️ **未検証** | 同上。`[MultiReturn]` の日本語キー表示、Import Library の可否とも実機待ち |
 | `SpqwGeometryNodes` の API シグネチャ | ⚠️ **未検証** | `Point`/`Circle`/`Solid` の各メソッドは一般的な Dynamo 3.x API 知識による**推測**。`ProtoGeometry.dll` を読み込めるか自体が未確認 |
 | Dynamo グラフ配線(§4.8・§4.9) | ⚠️ 未検証 | `File Path` / `Data.ImportCSV` / `Data.ParseJSON` の挙動は実機待ち。`ParseJSON` が使えない場合は JSON 読込ノードを追加する |
 | 参照 DLL バージョン | ⚠️ 未検証 | `verify-dll-versions.ps1` → exit 2(AutoCAD 未検出)。**exit 0 になるまで配布しない** |
@@ -1295,20 +1355,21 @@ Core の一部は 006/007/008 からの移植で、`scripts/port-from-legacy.sh`
 
 **過去のすべての変更点は `git log` で追える。** 本節は現在の設計を理解するうえで背景を知っておく価値がある、アーキテクチャ上の主要な決定だけを新しい順に要約する。
 
-1. **タイロッド・控え杭を両端の矢板に必ず設置する配置規則へ変更**(2026-08-01)。従来は 1 本目から `everyNPiles` 本ごとに並べるだけで、`(P−1)` が `everyNPiles` で割り切れない場合に**最終矢板にタイ材が付かなかった**。壁の 1 本目と最終 P 本目を固定し、端数は最終スパンで吸収する(`TieRodPitch.PileIndices` / `OffsetsY`)。あわせて ①タイロッドの 1 組目の Y ピックを廃止(壁の 1 本目に固定)、②控え杭は配置間隔 × 本数での再現をやめ**図面上の全タイロッドの Y に 1 対 1 で配置**、③Dynamo `CreateTieRodSolid` の引数を `tieSpacing_m`/`tieCount` → `pieceCount`/`everyNPiles` へ変更(破壊的変更)し、控え杭の Y 列を得る `SpqwNodes.CalcTiePlacement` を新設した(678→684 ケース)
-2. **基準部材の選択操作を廃止し、控え杭天端の決め方を変更**(2026-07-31)。`SPQW_TIEROD_Create` は前壁を選択させず杭中心 Y が最小の矢板(壁の 1 本目)を自動選択、`SPQW_ANCHORPILE_Create` は位置 Y が最小のタイロッドを自動選択してそこから前壁も解決する(選択操作 3 回 → 0 回)。あわせて控え杭の杭上端標高の既定値を「前壁の杭上端標高」から「**タイ材中心 + 0.5 m**」(`AnchorAlignment.HeadAboveTie_m`)へ変更した。控え杭の天端は前壁の施工基面ではなくタイ材の取り付け位置で決まるため。既定条件では従来と同じ +2.000 m になる(675→678 ケース)。
-3. **別セッションの批判的レビュー指摘を反映**(`SpqwGeometryNodes` 中心に 8 件)。①タイロッドが全長の半分(+約5.3m)陸側にずれる配置バグを修正(`ExtrudeAsSolid` は片側押し出しなのに AutoCAD 版 `CreateFrustum`(原点中心)と同じ中点移動を使っていた)、②控え杭ノードの検証を前壁用 `InputValidator`(K011)からテスト済みの `AnchorPileSteel`(JIS A 5525)へ差し替え、③`Vector.ZAxis()` の Dispose 漏れ 2 箇所、④HWL 既定値変更の波及漏れ、⑤「TieElevation 既定値 = Hwl 既定値 + 0.5m」を固定するテストを追加(674→675 ケース)
-4. **`SpqwGeometryNodes` を新設**(`ProtoGeometry.dll` 参照、実験的・未検証)。Dynamo が焼き込んだジオメトリに XData を後付けする手段が無いため `_Action` 相当には対応せず、パラメトリック性は Dynamo のグラフ再実行に委ねる設計にした
-5. **PP形継手の3Dモデル幾何整合性を検証**(`JointFit.PpPipeCenterDistance`)。2 本の継手鋼管の中心間距離が外径に依らず一定であることを確認し回帰テスト化した
-6. **Dynamo ノードを独立プロジェクトへ分離**。実機で `Dynamo.Exceptions.LibraryLoadFailedException` が発生し、原因は `<Private>False</Private>` 参照(AcCoreMgd 等)が `deps.json` に載らず Dynamo 側の依存解決(`AssemblyDependencyResolver` ベースと推定)が失敗すること。AutoCAD の `NETLOAD` は独自の読み込み経路のため影響を受けなかった。**最初に試した `IsVisibleInDynamoLibrary(false)` の付与は効果が無く**、AutoCAD 参照を持たない別プロジェクトへの分離で解決した
-7. **前壁の内部表現を Z_tip 基準から Z_head 基準へ刷新**(XData キーも `head_x/_y/_z` に変更)。Z_tip は表示専用の計算値になった。旧図面は読み込み時に自動変換する
-8. **前壁の傾斜角パラメータを廃止**(直杭のみに簡略化)。**控え杭の杭上端標高の既定値を前壁と同じ値に変更**
-9. **タイロッド組数を前壁総本数から自動算定**し、9 項目のプロンプトを廃止(計算式・XData は維持)
-10. **控え杭の生成をタイロッド選択方式に変更**(軸心標高・配置間隔・本数を自動設定)。位置 Y は図面内の全前壁のうち最小 Y に自動整列
-11. **カスタム有効幅 B を使った際の部材間ズレを修正**(`FrontWallRef.EffectiveWidthM` 新設)
-12. **継手 3D モデルの幾何整合性を検証**(`JointFit`)。あわせて実機で発覚した `Region.CreateFromCurves` のクラッシュを `PolygonCleanup` で解消した
-13. **帳票 CSV 取り込み・柱状図解析・打設歩掛積算 4 系統・付帯船舶・杭打機/杭打船選定を追加**(フェーズ 5 以降)
-14. **007/008 からの Core 移植・部材間整合チェックの新設**(フェーズ 1〜3)
+1. **控え杭に振動工法(バイブロハンマ)の打設歩掛積算を追加**(2026-08-01)。4節 3-4.6-9 の適用工法表が振動工法を標準工法に挙げ、施工歩掛は「16節 仮設工」によれると注記することを根拠に、`SPQW_ANCHORPILE_VibroEstimate`(16節 3-2、海上のみ)と `SPQW_ANCHORPILE_VibroJetEstimate`(16節 3-1、陸上/海上)を新設した。**陸上×鋼管杭×バイブロ単独は基準に歩掛が存在しない**ため(3-2 は海上限定、16節 2-1 の陸上歩掛は鋼矢板・H形鋼杭)実装せず、工法選定フローでジェット併用へ誘導する。計算層は既存の `VibroEstimate` / `VibroJetEstimate` を鋼管杭モード(Lo=0.90・Rj=0・ε=0・とび工 2/4 人)で再利用し、斜杭は ei が直杭前提のため警告を出す(684→688 ケース)
+2. **タイロッド・控え杭を両端の矢板に必ず設置する配置規則へ変更**(2026-08-01)。従来は 1 本目から `everyNPiles` 本ごとに並べるだけで、`(P−1)` が `everyNPiles` で割り切れない場合に**最終矢板にタイ材が付かなかった**。壁の 1 本目と最終 P 本目を固定し、端数は最終スパンで吸収する(`TieRodPitch.PileIndices` / `OffsetsY`)。あわせて ①タイロッドの 1 組目の Y ピックを廃止(壁の 1 本目に固定)、②控え杭は配置間隔 × 本数での再現をやめ**図面上の全タイロッドの Y に 1 対 1 で配置**、③Dynamo `CreateTieRodSolid` の引数を `tieSpacing_m`/`tieCount` → `pieceCount`/`everyNPiles` へ変更(破壊的変更)し、控え杭の Y 列を得る `SpqwNodes.CalcTiePlacement` を新設した(678→684 ケース)
+3. **基準部材の選択操作を廃止し、控え杭天端の決め方を変更**(2026-07-31)。`SPQW_TIEROD_Create` は前壁を選択させず杭中心 Y が最小の矢板(壁の 1 本目)を自動選択、`SPQW_ANCHORPILE_Create` は位置 Y が最小のタイロッドを自動選択してそこから前壁も解決する(選択操作 3 回 → 0 回)。あわせて控え杭の杭上端標高の既定値を「前壁の杭上端標高」から「**タイ材中心 + 0.5 m**」(`AnchorAlignment.HeadAboveTie_m`)へ変更した。控え杭の天端は前壁の施工基面ではなくタイ材の取り付け位置で決まるため。既定条件では従来と同じ +2.000 m になる(675→678 ケース)。
+4. **別セッションの批判的レビュー指摘を反映**(`SpqwGeometryNodes` 中心に 8 件)。①タイロッドが全長の半分(+約5.3m)陸側にずれる配置バグを修正(`ExtrudeAsSolid` は片側押し出しなのに AutoCAD 版 `CreateFrustum`(原点中心)と同じ中点移動を使っていた)、②控え杭ノードの検証を前壁用 `InputValidator`(K011)からテスト済みの `AnchorPileSteel`(JIS A 5525)へ差し替え、③`Vector.ZAxis()` の Dispose 漏れ 2 箇所、④HWL 既定値変更の波及漏れ、⑤「TieElevation 既定値 = Hwl 既定値 + 0.5m」を固定するテストを追加(674→675 ケース)
+5. **`SpqwGeometryNodes` を新設**(`ProtoGeometry.dll` 参照、実験的・未検証)。Dynamo が焼き込んだジオメトリに XData を後付けする手段が無いため `_Action` 相当には対応せず、パラメトリック性は Dynamo のグラフ再実行に委ねる設計にした
+6. **PP形継手の3Dモデル幾何整合性を検証**(`JointFit.PpPipeCenterDistance`)。2 本の継手鋼管の中心間距離が外径に依らず一定であることを確認し回帰テスト化した
+7. **Dynamo ノードを独立プロジェクトへ分離**。実機で `Dynamo.Exceptions.LibraryLoadFailedException` が発生し、原因は `<Private>False</Private>` 参照(AcCoreMgd 等)が `deps.json` に載らず Dynamo 側の依存解決(`AssemblyDependencyResolver` ベースと推定)が失敗すること。AutoCAD の `NETLOAD` は独自の読み込み経路のため影響を受けなかった。**最初に試した `IsVisibleInDynamoLibrary(false)` の付与は効果が無く**、AutoCAD 参照を持たない別プロジェクトへの分離で解決した
+8. **前壁の内部表現を Z_tip 基準から Z_head 基準へ刷新**(XData キーも `head_x/_y/_z` に変更)。Z_tip は表示専用の計算値になった。旧図面は読み込み時に自動変換する
+9. **前壁の傾斜角パラメータを廃止**(直杭のみに簡略化)。**控え杭の杭上端標高の既定値を前壁と同じ値に変更**
+10. **タイロッド組数を前壁総本数から自動算定**し、9 項目のプロンプトを廃止(計算式・XData は維持)
+11. **控え杭の生成をタイロッド選択方式に変更**(軸心標高・配置間隔・本数を自動設定)。位置 Y は図面内の全前壁のうち最小 Y に自動整列
+12. **カスタム有効幅 B を使った際の部材間ズレを修正**(`FrontWallRef.EffectiveWidthM` 新設)
+13. **継手 3D モデルの幾何整合性を検証**(`JointFit`)。あわせて実機で発覚した `Region.CreateFromCurves` のクラッシュを `PolygonCleanup` で解消した
+14. **帳票 CSV 取り込み・柱状図解析・打設歩掛積算 4 系統・付帯船舶・杭打機/杭打船選定を追加**(フェーズ 5 以降)
+15. **007/008 からの Core 移植・部材間整合チェックの新設**(フェーズ 1〜3)
 
 ---
 
@@ -1356,6 +1417,6 @@ Core の一部は 006/007/008 からの移植で、`scripts/port-from-legacy.sh`
 |---|---|---|
 | AutoCAD コマンド 19 個 | `grep CommandMethod src/**/Commands/*.cs` | 19 個、名称一致 |
 | Dynamo ノード 7 + 3 個 | `SpqwNodes.cs` / `SpqwGeometryNodes.cs` の public static | 一致 |
-| Core テスト 684 件 | `dotnet test` | 684 passed / 0 failed |
+| Core テスト 688 件 | `dotnet test` | 688 passed / 0 failed |
 | 参照 DLL 5 個と Copy Local | 各 `.csproj` | 一致(全て `<Private>False</Private>`) |
 | 有効幅 B の算定式 | `JointGeometry.EffectiveWidth(1.1, LT75)` | 1.178086 m(設計計算書の 1.17809 m と一致) |

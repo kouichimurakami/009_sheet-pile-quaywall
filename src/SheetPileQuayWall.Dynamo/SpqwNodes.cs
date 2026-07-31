@@ -975,5 +975,403 @@ namespace SheetPileQuayWall.Dynamo
                       pieceCount, pilePitch_m) }
             };
         }
+
+        // ノード: SpqwNodes.CalcAnchorPileVibroEstimate
+        // 控え杭・振動工法バイブロ単独(16節 3-2、海上打設のみ)の打設歩掛積算(2026-08-01)。
+        // SPQW_ANCHORPILE_VibroEstimate の対話フローを 1:1 で移植。
+        // 打込み対象は鋼管杭のため Lo=0.90 m/分・継手貫入抵抗 Rj=0・とび工 2/4 人となる。
+        // 陸上打設は基準に規定が無いため本ノードでは扱わない(CalcAnchorPileVibroJetEstimate を使う)。
+        [Autodesk.DesignScript.Runtime.MultiReturn(new[]
+        {
+            "本管質量 [kg]",
+            "1本当り質量 [t]",
+            "貫入抵抗値 R [kN]",
+            "バイブロハンマ規格",
+            "発動発電機",
+            "起重機船・杭打船",
+            "継手溶接機械台数",
+            "継手溶接発電機",
+            "台船",
+            "引船",
+            "揚錨船",
+            "潜水士船",
+            "準備時間 Tp [分/本]",
+            "打込時間 Tb [分/本]",
+            "溶接時間 Tw [分/本]",
+            "打設時間 Tc [分/本]",
+            "日当り打設 Q [本/日]",
+            "打設日数 [日]",
+            "世話役",
+            "とび工",
+            "普通作業員",
+            "特殊作業員",
+            "溶接工",
+            "斜杭の注意"
+        })]
+        public static System.Collections.Generic.Dictionary<string, object> CalcAnchorPileVibroEstimate(
+            double D_mm = 800.0,
+            double t_mm = 12.0,
+            double L_m = 20.0,
+            double inclDeg = 0.0,
+            double driveLength_m = 20.0,
+            int pileCount = 1,
+            int nTip = 50,
+            int nAvg = 20,
+            int jointCountPerPile = 0,
+            bool isSevereSea = false,
+            bool hasObstacle = false,
+            bool needDiverVessel = false)
+        {
+            double D_m = D_mm / 1000.0;
+            int D_mmRounded = (int)System.Math.Round(D_mm);
+            int t_mmRounded = (int)System.Math.Round(t_mm);
+
+            SheetPileQuayWall.Core.FrontWall.VibroDriveTarget target =
+                SheetPileQuayWall.Core.FrontWall.VibroDriveTarget.SteelPipePile;
+
+            // 控え杭は継手を持たない単独杭のため本管のみ(閉端底板は含めない)
+            double bodyMass_kg =
+                SheetPileQuayWall.Core.FrontWall.SectionProperties.CalcW(D_m, t_mm / 1000.0) * L_m;
+            double steelMass_t = bodyMass_kg / 1000.0;
+
+            double r = SheetPileQuayWall.Core.FrontWall.VibroEstimate.CalcR(
+                D_m, driveLength_m, nTip, nAvg, target);
+            string vibroClass =
+                SheetPileQuayWall.Core.FrontWall.VibroEstimate.GetVibroClass(steelMass_t, r);
+            var equipment = SheetPileQuayWall.Core.FrontWall.VibroEstimate.GetEquipment(vibroClass);
+
+            double Tp = SheetPileQuayWall.Core.FrontWall.VibroEstimate.CalcTp(driveLength_m);
+            double Tb = SheetPileQuayWall.Core.FrontWall.VibroEstimate.CalcTb(driveLength_m, target);
+            double Tw = SheetPileQuayWall.Core.FrontWall.DriveEstimate.CalcTw(
+                D_mmRounded, t_mmRounded, jointCountPerPile);
+            double Tc = Tp + Tb + Tw;
+
+            SheetPileQuayWall.Core.FrontWall.SeaCondition sea = isSevereSea
+                ? SheetPileQuayWall.Core.FrontWall.SeaCondition.Severe
+                : SheetPileQuayWall.Core.FrontWall.SeaCondition.Normal;
+            SheetPileQuayWall.Core.FrontWall.ObstacleStatus obstacle = hasObstacle
+                ? SheetPileQuayWall.Core.FrontWall.ObstacleStatus.Exists
+                : SheetPileQuayWall.Core.FrontWall.ObstacleStatus.None;
+
+            double Q = SheetPileQuayWall.Core.FrontWall.VibroEstimate.CalcQ(
+                Tc, sea, obstacle, pileCount);
+            if (Q <= 0.0)
+            {
+                throw new System.ArgumentException(
+                    "1日当り打設本数が0以下になりました。入力条件を確認してください。");
+            }
+            int driveDays = (int)System.Math.Ceiling(pileCount / Q);
+
+            bool splicing = jointCountPerPile > 0;
+            var labor = SheetPileQuayWall.Core.FrontWall.VibroEstimate.GetLabor(
+                target, driveLength_m, splicing, D_mmRounded);
+            var weldEquipment = SheetPileQuayWall.Core.FrontWall.VibroEstimate.GetWeldEquipment(
+                D_mmRounded, splicing);
+
+            var bargeTug = SheetPileQuayWall.Core.FrontWall.VibroEstimate.GetBargeAndTug(L_m);
+            string diverVessel = needDiverVessel
+                ? SheetPileQuayWall.Core.FrontWall.VibroEstimate.DiverVesselSpec
+                : "";
+
+            return new System.Collections.Generic.Dictionary<string, object>
+            {
+                { "本管質量 [kg]",          bodyMass_kg },
+                { "1本当り質量 [t]",        steelMass_t },
+                { "貫入抵抗値 R [kN]",      r },
+                { "バイブロハンマ規格",     vibroClass },
+                { "発動発電機",             equipment.generator },
+                { "起重機船・杭打船",       equipment.craneVessel },
+                { "継手溶接機械台数",       splicing ? weldEquipment.machineCount : 0 },
+                { "継手溶接発電機",         splicing ? weldEquipment.generator : "" },
+                { "台船",                   bargeTug.barge },
+                { "引船",                   bargeTug.tug },
+                { "揚錨船",                 SheetPileQuayWall.Core.FrontWall.VibroEstimate.AnchorHandlingVesselSpec },
+                { "潜水士船",               diverVessel },
+                { "準備時間 Tp [分/本]",    Tp },
+                { "打込時間 Tb [分/本]",    Tb },
+                { "溶接時間 Tw [分/本]",    Tw },
+                { "打設時間 Tc [分/本]",    Tc },
+                { "日当り打設 Q [本/日]",   Q },
+                { "打設日数 [日]",          driveDays },
+                { "世話役",                 labor.foreman },
+                { "とび工",                 labor.rigger },
+                { "普通作業員",             labor.laborer },
+                { "特殊作業員",             labor.specialist },
+                { "溶接工",                 labor.welder },
+                { "斜杭の注意",             InclinedPileNote(inclDeg) }
+            };
+        }
+
+        // ノード: SpqwNodes.CalcAnchorPileVibroJetEstimate
+        // 控え杭・振動工法ジェット併用(16節 3-1、陸上/海上とも)の打設歩掛積算(2026-08-01)。
+        // SPQW_ANCHORPILE_VibroJetEstimate の対話フローを 1:1 で移植。
+        // 陸上の控え杭に振動工法を適用できる唯一の基準準拠経路(16節 3-2 は海上限定)。
+        [Autodesk.DesignScript.Runtime.MultiReturn(new[]
+        {
+            "本管質量 [kg]",
+            "杭1本当り質量 Wp [t]",
+            "基本振幅係数 A0",
+            "必要偏心モーメント K0 [Nm]",
+            "バイブロハンマ規格",
+            "発動発電機(バイブロ用)",
+            "クレーン吊上げ荷重 Cf [t]",
+            "台船",
+            "引船",
+            "揚錨船",
+            "潜水士船",
+            "ジェット使用台数",
+            "噴射ノズル数",
+            "発動発電機(ジェット用)",
+            "水中ポンプ",
+            "水中ポンプ出力 [kW]",
+            "水中ポンプ台数",
+            "水中ポンプ用発電機",
+            "水槽容量 [m3]",
+            "水槽基数",
+            "γ (1m当り) [分/m]",
+            "β",
+            "δ",
+            "準備時間 Tp [分/本]",
+            "打込時間 Tb [分/本]",
+            "溶接時間 Tw [分/本]",
+            "打設時間 Tc [分/本]",
+            "日当り打設 Q [本/日]",
+            "打設日数 [日]",
+            "世話役",
+            "とび工",
+            "普通作業員",
+            "特殊作業員",
+            "溶接工",
+            "斜杭の注意"
+        })]
+        public static System.Collections.Generic.Dictionary<string, object> CalcAnchorPileVibroJetEstimate(
+            double D_mm = 800.0,
+            double t_mm = 12.0,
+            double L_m = 20.0,
+            double inclDeg = 0.0,
+            bool isOffshore = false,
+            double operatingHours = 8.0,
+            double driveLength_m = 20.0,
+            double liftLength_m = 20.0,
+            int liftCount = 1,
+            int pileCount = 1,
+            string soilType = "SG",
+            int nAvg = 30,
+            double maxCobble_mm = 100.0,
+            double qu = 10.0,
+            bool hasChuck = true,
+            int jetCount = 2,
+            int nozzleCount = 6,
+            bool needWaterSupply = false,
+            int jointCountPerPile = 0,
+            bool isSevereSea = false,
+            bool hasObstacle = false,
+            bool needDiverVessel = false,
+            double vibroMass_t = 10.0)
+        {
+            double D_m = D_mm / 1000.0;
+            int D_mmRounded = (int)System.Math.Round(D_mm);
+            int t_mmRounded = (int)System.Math.Round(t_mm);
+
+            string? jetErr =
+                SheetPileQuayWall.Core.FrontWall.VibroJetEstimate.ValidateJetApplicability(D_m, L_m);
+            if (jetErr != null)
+            {
+                throw new System.ArgumentException(jetErr);
+            }
+
+            if (jetCount < 1 || jetCount > 4)
+            {
+                throw new System.ArgumentException(
+                    $"ジェット使用台数 {jetCount} は範囲外です(1〜4。基準 3-16-16)。", nameof(jetCount));
+            }
+
+            SheetPileQuayWall.Core.FrontWall.ConstructionSite site = isOffshore
+                ? SheetPileQuayWall.Core.FrontWall.ConstructionSite.Offshore
+                : SheetPileQuayWall.Core.FrontWall.ConstructionSite.Onshore;
+            double effectiveOperatingHours = isOffshore ? 6.0 : operatingHours;
+
+            // 控え杭は継手を持たない単独杭のため本管のみ(閉端底板は含めない)
+            double bodyMass_kg =
+                SheetPileQuayWall.Core.FrontWall.SectionProperties.CalcW(D_m, t_mm / 1000.0) * L_m;
+            double pileMass_t = bodyMass_kg / 1000.0;
+
+            SheetPileQuayWall.Core.FrontWall.JetLayerType layer = soilType switch
+            {
+                "CL" => SheetPileQuayWall.Core.FrontWall.JetLayerType.Clay,
+                "CG" => SheetPileQuayWall.Core.FrontWall.JetLayerType.CobbleGravel,
+                "CE" => SheetPileQuayWall.Core.FrontWall.JetLayerType.Cemented,
+                "RK" => SheetPileQuayWall.Core.FrontWall.JetLayerType.Rock,
+                _ => SheetPileQuayWall.Core.FrontWall.JetLayerType.SandGravel,
+            };
+
+            double eta = 0.0;
+            if (layer == SheetPileQuayWall.Core.FrontWall.JetLayerType.CobbleGravel)
+            {
+                double? etaValue = SheetPileQuayWall.Core.FrontWall.VibroJetEstimate.GetEta(maxCobble_mm);
+                if (etaValue == null)
+                {
+                    throw new System.ArgumentException(
+                        "最大玉石径200mm超の地盤は基準上ηを別途定めます。本ノードでは算出できません。");
+                }
+                eta = etaValue.Value;
+            }
+
+            bool useQu = layer == SheetPileQuayWall.Core.FrontWall.JetLayerType.Rock;
+            SheetPileQuayWall.Core.FrontWall.JetSoilType a0Soil =
+                SheetPileQuayWall.Core.FrontWall.VibroJetEstimate.ToAmplitudeSoil(layer);
+            double? a0 = useQu
+                ? SheetPileQuayWall.Core.FrontWall.VibroJetEstimate.GetAmplitudeFactorByQu(a0Soil, qu)
+                : SheetPileQuayWall.Core.FrontWall.VibroJetEstimate.GetAmplitudeFactor(a0Soil, nAvg);
+            if (a0 == null)
+            {
+                throw new System.ArgumentException(
+                    "指定した土質とN値(またはqu)の組合せは基本振幅係数表(3-16-15)に定義がありません。");
+            }
+            double a0Applied = hasChuck
+                ? a0.Value
+                : SheetPileQuayWall.Core.FrontWall.VibroJetEstimate.AdjustForNoChuck(a0.Value);
+
+            double k0 = SheetPileQuayWall.Core.FrontWall.VibroJetEstimate.CalcK0(a0Applied, pileMass_t);
+            var vibro = SheetPileQuayWall.Core.FrontWall.VibroJetEstimate.GetVibroClass(k0);
+            if (vibro.generator.Length == 0)
+            {
+                throw new System.ArgumentException(
+                    $"必要偏心モーメント K0={k0:F1}N・m が規格表(3-16-15、上限2,900)を超えています。");
+            }
+
+            double gamma = SheetPileQuayWall.Core.FrontWall.VibroJetEstimate.CalcGamma(
+                layer, nAvg, qu, eta);
+
+            double? beta = SheetPileQuayWall.Core.FrontWall.VibroJetEstimate.GetBeta(
+                D_mmRounded, t_mmRounded);
+            if (beta == null)
+            {
+                throw new System.ArgumentException(
+                    $"φ{D_mmRounded}×t{t_mmRounded} は係数βの表(3-16-20)の範囲外です。");
+            }
+
+            double? delta = SheetPileQuayWall.Core.FrontWall.VibroJetEstimate.GetDelta(
+                D_mmRounded, vibro.vibro);
+            if (delta == null)
+            {
+                throw new System.ArgumentException(
+                    $"φ{D_mmRounded} と {vibro.vibro} の組合せは係数δの表(3-16-21)で「−」(適用対象外)です。");
+            }
+
+            // 控え杭は継手を持たないため継手加算時間 ε = 0
+            const double epsilon = 0.0;
+
+            bool splicing = jointCountPerPile > 0;
+            SheetPileQuayWall.Core.FrontWall.SeaCondition sea = isSevereSea
+                ? SheetPileQuayWall.Core.FrontWall.SeaCondition.Severe
+                : SheetPileQuayWall.Core.FrontWall.SeaCondition.Normal;
+            SheetPileQuayWall.Core.FrontWall.ObstacleStatus obstacle = hasObstacle
+                ? SheetPileQuayWall.Core.FrontWall.ObstacleStatus.Exists
+                : SheetPileQuayWall.Core.FrontWall.ObstacleStatus.None;
+
+            double Tp = SheetPileQuayWall.Core.FrontWall.VibroJetEstimate.CalcTp(liftLength_m, liftCount);
+            double Tb = SheetPileQuayWall.Core.FrontWall.VibroJetEstimate.CalcTb(
+                gamma, beta.Value, delta.Value, driveLength_m, epsilon);
+            double Tw = SheetPileQuayWall.Core.FrontWall.DriveEstimate.CalcTw(
+                D_mmRounded, t_mmRounded, jointCountPerPile);
+            double Tc = Tp + Tb + Tw;
+
+            double Q = SheetPileQuayWall.Core.FrontWall.VibroJetEstimate.CalcQ(
+                site, effectiveOperatingHours, Tc, sea, obstacle, pileCount);
+            if (Q <= 0.0)
+            {
+                throw new System.ArgumentException(
+                    "1日当り打設本数が0以下になりました。入力条件を確認してください。");
+            }
+            int driveDays = (int)System.Math.Ceiling(pileCount / Q);
+
+            var labor = SheetPileQuayWall.Core.FrontWall.VibroJetEstimate.GetLabor(
+                site, L_m, splicing, D_mmRounded);
+            double craneCapacity_t =
+                SheetPileQuayWall.Core.FrontWall.VibroJetEstimate.CalcCraneCapacity(
+                    vibroMass_t, pileMass_t);
+            string jetGenerator =
+                SheetPileQuayWall.Core.FrontWall.VibroJetEstimate.GetJetGenerator(jetCount);
+
+            string barge = "", tug = "", anchorVessel = "", diverVessel = "";
+            if (isOffshore)
+            {
+                var bargeTug = SheetPileQuayWall.Core.FrontWall.VibroEstimate.GetBargeAndTug(L_m);
+                barge = bargeTug.barge;
+                tug = bargeTug.tug;
+                anchorVessel = SheetPileQuayWall.Core.FrontWall.VibroEstimate.AnchorHandlingVesselSpec;
+                if (needDiverVessel)
+                {
+                    diverVessel = SheetPileQuayWall.Core.FrontWall.VibroEstimate.DiverVesselSpec;
+                }
+            }
+
+            string waterPump = "", waterGenerator = "";
+            double waterPumpKw = 0.0;
+            int waterPumpCount = 0, waterTankVolume = 0, waterTankCount = 0;
+            if (needWaterSupply)
+            {
+                var w = SheetPileQuayWall.Core.FrontWall.VibroJetEstimate.GetWaterSupply(jetCount);
+                waterPump = w.pump;
+                waterPumpKw = w.pumpOutput_kW;
+                waterPumpCount = w.pumpCount;
+                waterGenerator = w.generator;
+                waterTankVolume = w.tankVolume_m3;
+                waterTankCount = w.tankCount;
+            }
+
+            return new System.Collections.Generic.Dictionary<string, object>
+            {
+                { "本管質量 [kg]",              bodyMass_kg },
+                { "杭1本当り質量 Wp [t]",       pileMass_t },
+                { "基本振幅係数 A0",            a0Applied },
+                { "必要偏心モーメント K0 [Nm]", k0 },
+                { "バイブロハンマ規格",         vibro.vibro },
+                { "発動発電機(バイブロ用)",     vibro.generator },
+                { "クレーン吊上げ荷重 Cf [t]",  craneCapacity_t },
+                { "台船",                       barge },
+                { "引船",                       tug },
+                { "揚錨船",                     anchorVessel },
+                { "潜水士船",                   diverVessel },
+                { "ジェット使用台数",           jetCount },
+                { "噴射ノズル数",               nozzleCount },
+                { "発動発電機(ジェット用)",     jetGenerator },
+                { "水中ポンプ",                 waterPump },
+                { "水中ポンプ出力 [kW]",        waterPumpKw },
+                { "水中ポンプ台数",             waterPumpCount },
+                { "水中ポンプ用発電機",         waterGenerator },
+                { "水槽容量 [m3]",              waterTankVolume },
+                { "水槽基数",                   waterTankCount },
+                { "γ (1m当り) [分/m]",         gamma },
+                { "β",                          beta.Value },
+                { "δ",                          delta.Value },
+                { "準備時間 Tp [分/本]",        Tp },
+                { "打込時間 Tb [分/本]",        Tb },
+                { "溶接時間 Tw [分/本]",        Tw },
+                { "打設時間 Tc [分/本]",        Tc },
+                { "日当り打設 Q [本/日]",       Q },
+                { "打設日数 [日]",              driveDays },
+                { "世話役",                     labor.foreman },
+                { "とび工",                     labor.rigger },
+                { "普通作業員",                 labor.laborer },
+                { "特殊作業員",                 labor.specialist },
+                { "溶接工",                     labor.welder },
+                { "斜杭の注意",                 InclinedPileNote(inclDeg) }
+            };
+        }
+
+        // 振動工法の基準作業能力係数 ei は直杭を前提とし、斜杭は基準上「別途検討」
+        // (3-16-19)。打撃工法の K=1.2 に相当する係数が無いため、直杭の値で算出した
+        // うえで注意文を返す(斜杭でない場合は空文字)。
+        private static string InclinedPileNote(double inclDeg)
+        {
+            bool inclined = System.Math.Abs(inclDeg) >
+                SheetPileQuayWall.Core.AnchorPile.AnchorDriveEstimate.InclinationTolerance_deg;
+            return inclined
+                ? $"傾斜角 {inclDeg:F1}° の斜杭です。振動工法の ei は直杭前提で、斜杭は基準上「別途検討」。"
+                  + "上記は直杭の値による参考値です。"
+                : "";
+        }
     }
 }

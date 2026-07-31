@@ -173,6 +173,8 @@
 | `SPQW_ANCHORPILE_Action` | `ANCHORPILE_Action`(006) | 前壁基準の整列位置に再生成 |
 | `SPQW_ANCHORPILE_Query` | `ANCHORPILE_Query`(006) | 諸元・整列座標・積算数量(1 本あたり)を出力 |
 | `SPQW_ANCHORPILE_Estimate` | (新設。旧版に相当なし) | **打撃工法**の打設歩掛積算(4節 3-4.6 鋼杭式、**陸上打設のみ**。第3版(l)) |
+| `SPQW_ANCHORPILE_VibroEstimate` | (新設。旧版に相当なし) | **振動工法・バイブロ単独**の打設歩掛積算(16節 3-2、**海上打設のみ**。2026-08-01) |
+| `SPQW_ANCHORPILE_VibroJetEstimate` | (新設。旧版に相当なし) | **振動工法・ジェット併用**の打設歩掛積算(16節 3-1、陸上/海上とも。陸上の控え杭に振動工法を適用できる唯一の基準準拠経路。2026-08-01) |
 | `SPQW_QUAYWALL_Estimate` | (新設。旧版に相当なし) | 岸壁 1 施設分の鋼材質量を 3 部材まとめて集計(フェーズ 5) |
 | `SPQW_FRONTWALL_ImportCsv` | (新設。旧版に相当なし) | 帳票 CSV から前壁鋼管矢板を一括生成(壁一括生成。第3版(k)) |
 | `SPQW_TIEROD_ImportCsv` | (新設。旧版に相当なし) | 前壁選択 → 帳票 CSV からタイロッドを一括生成(第3版(k)) |
